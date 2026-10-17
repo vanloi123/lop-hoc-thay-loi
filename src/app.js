@@ -201,7 +201,12 @@ if (!SETS.find(s => s.id === currentId)) currentId = SETS[0].id;
 const saveS = () => store.set("lhvt2.settings", S);
 const saveSets = () => { store.set("lhvt2.sets", SETS); store.set("lhvt2.current", currentId); };
 /* lớp học: danh sách học sinh + bảng điểm buổi học */
-const CLS = Object.assign({ roster: [], scores: {}, player: null }, store.get("lhvt4.class", {}));
+const CLS = migrateCls(store.get("lhvt4.class", {}));
+/* CLS.roster / CLS.scores luôn trỏ tới lớp đang chọn (giữ tương thích với mã cũ) */
+Object.defineProperties(CLS, {
+  roster: { get: () => curClass().roster, set: v => { curClass().roster = v; }, enumerable: false },
+  scores: { get: () => curClass().scores, set: v => { curClass().scores = v; }, enumerable: false }
+});
 const saveCls = () => store.set("lhvt4.class", CLS);
 function creditPlayer(name, score, game) {
   if (!name) return;
@@ -3018,7 +3023,7 @@ function Intro(g) {
       const paint = () => $$(".pchip", players).forEach(c => c.classList.toggle("active", c._n === (Play.player || "")));
       const add = (label, n) => { const c = on(h("button", { class: "pchip", "data-hit": true }, label), () => { Play.player = n || null; paint(); }); c._n = n || ""; players.append(c); };
       if (CLS.roster.length) {
-        CLS.roster.forEach(n => add(n, n));
+        presentList().forEach(n => add(n, n));
         const rnd = on(h("button", { class: "pchip", "data-hit": true }, "Gọi ngẫu nhiên"), () => {
           const chips = $$(".pchip", players).filter(c => c._n); let k = 0, steps = 16 + (Math.random() * chips.length | 0);
           const tick = () => { chips.forEach(c => c.classList.remove("flash")); const c = chips[k % chips.length]; c.classList.add("flash"); Sfx.tick();
@@ -3101,50 +3106,626 @@ function Result(g, r) {
   }, { game: true });
 }
 
-/* ---------------- HỌC SINH & ĐIỂM ---------------- */
+/* ==========================================================
+   HỌC SINH & ĐIỂM (v6.4)
+   Nhiều lớp · nhập danh sách từ Excel/CSV · điểm danh trong ngày
+   Gọi tên: máy quay số hoặc vòng quay, không lặp lại, đọc tên, trình chiếu
+   Xếp hạng: bục vinh danh, điểm thưởng nhanh, xếp hạng theo tổ
+   ========================================================== */
+function migrateCls(raw) {
+  const o = raw && typeof raw === "object" ? raw : {};
+  let classes = Array.isArray(o.classes) && o.classes.length ? o.classes : null;
+  if (!classes) classes = [{ id: "c" + Date.now().toString(36), name: "Lớp của tôi", roster: Array.isArray(o.roster) ? o.roster : [], scores: o.scores && typeof o.scores === "object" ? o.scores : {} }];
+  classes.forEach(c => {
+    c.id = c.id || "c" + Math.random().toString(36).slice(2, 8); c.name = c.name || "Lớp của tôi";
+    c.roster = Array.isArray(c.roster) ? c.roster : []; c.scores = c.scores || {}; c.meta = c.meta || {};
+    c.absent = c.absent || {}; c.absentDate = c.absentDate || ""; c.called = Array.isArray(c.called) ? c.called : []; c.pool = Array.isArray(c.pool) ? c.pool : null;
+  });
+  return { classes, cur: classes.find(c => c.id === o.cur) ? o.cur : classes[0].id, player: null };
+}
+const curClass = () => CLS.classes.find(c => c.id === CLS.cur) || CLS.classes[0];
+
+const CL_IC = {
+  userPlus: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></svg>',
+  dice: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.3" fill="currentColor"/></svg>',
+  list: '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>',
+  trophy: '<svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4"/></svg>',
+  screen: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  sort: '<svg viewBox="0 0 24 24"><path d="M4 6h10M4 12h7M4 18h4M17 5v14M14 16l3 3 3-3"/></svg>',
+  paste: '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  reel: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M4 9h16M4 15h16"/></svg>',
+  wheel: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 5v16M4 13h16M6.3 7.3l11.4 11.4M17.7 7.3L6.3 18.7"/><path d="M10 2h4l-2 3z" fill="currentColor"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg>',
+  user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20.5a7 7 0 0 1 14 0"/></svg>',
+  users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.3a5 5 0 0 1 6 5.2"/></svg>',
+  medal: '<svg viewBox="0 0 24 24"><circle cx="12" cy="15" r="5"/><path d="M8.5 11L6 3h4l2 5 2-5h4l-2.5 8"/></svg>',
+  pen: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>'
+};
+const clIcon = (k, cls = "") => h("span", { class: "ico " + cls, html: CL_IC[k] || IC[k] || "" });
+const AV_COLORS = ["#0066FF", "#7C3AED", "#DB2777", "#059669", "#0891B2", "#4F46E5", "#E11D48", "#0D9488", "#9333EA", "#2563EB", "#C026D3", "#16A34A"];
+const nameWords = n => String(n).replace(/\(.*?\)/g, "").trim().split(/\s+/).filter(Boolean);
+const givenName = n => { const w = nameWords(n).filter(x => !/^\d+$/.test(x)); return w[w.length - 1] || String(n); };
+function initials(n) { const w = nameWords(n).filter(x => !/^\d+$/.test(x)); if (!w.length) return "?"; const g = w[w.length - 1]; return (w.length > 1 ? w[0][0] + g[0] : g.slice(0, 2)).toUpperCase(); }
+function avColor(n) { let x = 0; for (const ch of String(n)) x = (x * 31 + ch.charCodeAt(0)) >>> 0; return AV_COLORS[x % AV_COLORS.length]; }
+const avatar = (n, cls = "") => h("span", { class: "av " + cls, style: `--av:${avColor(n)}`, "aria-hidden": "true" }, initials(n));
+const viNameCmp = (a, b) => givenName(a).localeCompare(givenName(b), "vi") || a.localeCompare(b, "vi");
+function cleanName(s) {
+  let n = String(s ?? "").replace(/^\s*\d+\s*[.)\-–:]\s*/, "").replace(/\s+/g, " ").trim();
+  if (n && n === n.toUpperCase() && /\p{L}/u.test(n)) n = n.toLowerCase().replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase());
+  return n;
+}
+function classAbsent(c) { const d = todayStr(); if (c.absentDate !== d) { c.absent = {}; c.absentDate = d; } return c.absent; }
+const presentList = (c = curClass()) => c.roster.filter(n => !classAbsent(c)[n]);
+const groupsOf = c => [...new Set(c.roster.map(n => (c.meta[n]?.group || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
+const callCount = (c, n) => c.called.reduce((a, x) => a + (x.n === n), 0);
+const calledToday = c => { const t0 = new Date(); t0.setHours(0, 0, 0, 0); return c.called.filter(x => x.t >= +t0); };
+const scoreOf = (c, n) => c.scores[n]?.score || 0;
+const pickMeta = s => { const m = {}; ["group", "gender", "note"].forEach(k => { const v = String(s[k] ?? "").trim(); if (v) m[k] = v; }); return m; };
+function addStudents(c, list, mode) {
+  if (mode === "replace") { c.roster = []; c.meta = {}; c.pool = null; }
+  const have = new Set(c.roster), fromFile = new Set(); let added = 0, renamed = 0, updated = 0;
+  for (const s of list) {
+    let n = cleanName(s.name); if (!n) continue;
+    if (have.has(n) && !fromFile.has(n)) { Object.assign(c.meta[n] || (c.meta[n] = {}), pickMeta(s)); updated++; fromFile.add(n); continue; }
+    if (have.has(n)) { let k = 2; while (have.has(`${n} ${k}`)) k++; n = `${n} ${k}`; renamed++; }
+    have.add(n); fromFile.add(n); c.roster.push(n);
+    const m = pickMeta(s); if (Object.keys(m).length) c.meta[n] = m; added++;
+  }
+  c.pool = null; return { added, renamed, updated };
+}
+function renameStudent(c, a, b) {
+  if (a === b) return;
+  c.roster = c.roster.map(n => n === a ? b : n);
+  for (const k of ["meta", "scores", "absent"]) if (c[k] && a in c[k]) { c[k][b] = c[k][a]; delete c[k][a]; }
+  c.called.forEach(x => { if (x.n === a) x.n = b; });
+  if (c.pool) c.pool = c.pool.map(n => n === a ? b : n);
+  Object.values(QSTATS).forEach(set => Object.values(set).forEach(e => { if (e.pl && a in e.pl) { e.pl[b] = e.pl[a]; delete e.pl[a]; } }));
+  if (Play.player === a) Play.player = b;
+}
+function removeStudent(c, n) {
+  c.roster = c.roster.filter(x => x !== n); delete c.meta[n]; delete c.scores[n]; delete c.absent[n];
+  if (c.pool) c.pool = c.pool.filter(x => x !== n); if (Play.player === n) Play.player = null;
+}
+function award(n, pts) {
+  const r = CLS.scores[n] || (CLS.scores[n] = { score: 0, plays: 0, best: {} });
+  r.score = Math.max(0, (r.score || 0) + pts); r.bonus = (r.bonus || 0) + pts; saveCls();
+  pts > 0 ? Sfx.right() : Sfx.tick();
+}
+
+/* ---------- đọc danh sách lớp từ Excel / CSV ---------- */
+function parseRosterRows(rows) {
+  rows = (rows || []).map(r => (r || []).map(v => String(v ?? "").trim()));
+  let hi = -1, col = {}, clsName = "";
+  for (let r = 0; r < Math.min(rows.length, 20); r++) {
+    const line = rows[r].join(" ");
+    const m = line.match(/l[ớo]p\s*[:\-]?\s*(\d{1,2}\s*[A-Za-zĐđ]?\s*\d{0,2})\b/i);
+    if (m && !clsName) clsName = "Lớp " + m[1].replace(/\s+/g, "").toUpperCase();
+    const f = {};
+    rows[r].forEach((v, i) => {
+      const t = normTxt(v).replace(/[.:]/g, "").trim();
+      if (/^(ho va ten|ho ten|hoten|ho va ten hoc sinh|ten hoc sinh|hoc sinh|full ?name|student|name)$/.test(t)) f.full ??= i;
+      else if (/^(ho va ten dem|ho dem|ho va dem|ho va chu dem|ho|family name|last name)$/.test(t)) f.last ??= i;
+      else if (/^(ten|first name|given name)$/.test(t)) f.first ??= i;
+      else if (/^(to|nhom|to nhom|doi|to\/nhom|group|team)$/.test(t)) f.group ??= i;
+      else if (/^(gioi tinh|gt|nam\/nu|nam nu|phai|gender|sex)$/.test(t)) f.gender ??= i;
+      else if (/^(ghi chu|note|notes)$/.test(t)) f.note ??= i;
+    });
+    if (f.full != null || f.first != null) { hi = r; col = f; break; }
+  }
+  const looksName = v => v && /\p{L}/u.test(v) && !/^\d+([.,]\d+)?$/.test(v) && v.length <= 60 && !/^(stt|tt|tổng|tong|danh sách|ghi chú)/i.test(v);
+  if (hi < 0) { // không có dòng tiêu đề: chọn cột có nhiều ô giống tên người nhất
+    const score = []; rows.forEach(r => r.forEach((v, i) => { if (looksName(v) && v.split(/\s+/).length >= 2) score[i] = (score[i] || 0) + 1; }));
+    let best = -1; score.forEach((s, i) => { if (s && (best < 0 || s > score[best])) best = i; });
+    if (best < 0) return { students: [], skipped: 0, clsName, cols: {} };
+    col = { full: best }; hi = -1;
+  }
+  const students = []; let skipped = 0;
+  for (let r = hi + 1; r < rows.length; r++) {
+    const row = rows[r]; if (!row.some(Boolean)) continue;
+    const name = col.full != null ? row[col.full] : [row[col.last], row[col.first]].filter(Boolean).join(" ");
+    if (!looksName(name) || /^(họ và tên|ho va ten|tên|ten)$/i.test(name)) { skipped++; continue; }
+    let gender = col.gender != null ? row[col.gender] : "";
+    if (gender) { const g = normTxt(gender); gender = /^(nu|n|female|f|x)$/.test(g) ? "Nữ" : /^(nam|male|m)$/.test(g) ? "Nam" : gender; }
+    students.push({ name: cleanName(name), group: col.group != null ? row[col.group] : "", gender, note: col.note != null ? row[col.note] : "" });
+  }
+  return { students, skipped, clsName, cols: { group: col.group != null, gender: col.gender != null, note: col.note != null, split: col.full == null } };
+}
+function rosterTemplate() {
+  const rows = [["STT", "Họ và tên", "Tổ", "Giới tính", "Ghi chú"], ["1", "Nguyễn Văn An", "Tổ 1", "Nam", ""], ["2", "Trần Thị Bình", "Tổ 1", "Nữ", "Lớp trưởng"], ["3", "Lò Văn Chiến", "Tổ 2", "Nam", ""], ["4", "Giàng Thị Dung", "Tổ 2", "Nữ", ""]];
+  downloadBlob(XL.write([{ name: "Danh sách lớp", header: true, widths: [7, 32, 12, 12, 30], rows }]), "Mau-danh-sach-lop.xlsx");
+  toast("Đã tải file mẫu. Điền tên học sinh vào cột “Họ và tên” rồi nhập lại vào đây.", 3500);
+}
+function exportRoster(c) {
+  const rows = [["STT", "Họ và tên", "Tổ", "Giới tính", "Ghi chú", "Điểm buổi học", "Lượt chơi", "Số lần được gọi"],
+    ...c.roster.map((n, i) => [String(i + 1), n, c.meta[n]?.group || "", c.meta[n]?.gender || "", c.meta[n]?.note || "", String(scoreOf(c, n)), String(c.scores[n]?.plays || 0), String(callCount(c, n))])];
+  downloadBlob(XL.write([{ name: c.name.slice(0, 31), header: true, widths: [7, 32, 12, 12, 26, 14, 11, 16], rows }]), `${c.name} - danh sach - ${todayStr()}.xlsx`);
+  toast("Đã xuất danh sách lớp ra Excel");
+}
+
+/* ---------- chọn tên: không lặp lại cho tới khi gọi hết ---------- */
+S.pick = Object.assign({ present: true, noRepeat: true, group: "", count: 1, speak: true, mode: "reel" }, S.pick || {});
+function eligible(c) {
+  let b = S.pick.present ? presentList(c) : c.roster.slice();
+  if (S.pick.group) b = b.filter(n => (c.meta[n]?.group || "") === S.pick.group);
+  return b;
+}
+function drawNames(c, k) {
+  const base = eligible(c); if (!base.length) return { names: [], newRound: false };
+  let names = [], newRound = false;
+  if (S.pick.noRepeat) {
+    let pool = (c.pool || []).filter(n => base.includes(n));
+    for (let i = 0; i < Math.min(k, base.length); i++) {
+      if (!pool.length) { if (c.pool) newRound = true; pool = shuffle(base.filter(n => !names.includes(n))); }
+      const n = pool.splice(Math.random() * pool.length | 0, 1)[0]; if (n) names.push(n);
+    }
+    c.pool = pool;
+  } else names = pickN(base, Math.min(k, base.length));
+  return { names, newRound };
+}
+const remainingInRound = c => { const base = eligible(c); return c.pool ? c.pool.filter(n => base.includes(n)).length : base.length; };
+
+/* ---------- máy quay số ---------- */
+function makeReel() {
+  const strip = h("div", { class: "reel-strip" }), box = h("div", { class: "reel" }, strip, h("div", { class: "reel-focus" }));
+  let raf = 0;
+  const row = n => h("div", { class: "reel-row" }, n ? avatar(n, "md") : h("span", { class: "av md ghost" }, "?"), h("span", { class: "reel-name" }, n || "Sẵn sàng gọi tên"));
+  const idle = (names) => { const r = box.clientHeight / 3 || 96; box.style.setProperty("--row", r + "px"); strip.innerHTML = ""; const pick = shuffle(names).slice(0, 2); [pick[0], null, pick[1]].forEach(n => strip.append(row(n))); strip.style.transform = "translateY(0)"; [...strip.children].forEach((e, i) => e.classList.toggle("on", i === 1)); };
+  function spin(winner, pool, ms = 3200) {
+    return new Promise(res => {
+      const R = box.clientHeight / 3 || 96; box.style.setProperty("--row", R + "px");
+      const N = clamp(26 + pool.length, 30, 46), list = [];
+      for (let i = 0; i < N; i++) list.push(pool[Math.random() * pool.length | 0]);
+      list.push(winner); for (let i = 0; i < 2; i++) list.push(pool[Math.random() * pool.length | 0]);
+      strip.innerHTML = ""; list.forEach(n => strip.append(row(n)));
+      const target = N, start = 1, t0 = performance.now(); let last = -1;
+      const ease = t => 1 - Math.pow(1 - t, 4);
+      const kids = strip.children;
+      const step = now => {
+        const t = Math.min(1, (now - t0) / ms), pos = start + (target - start) * ease(t), idx = Math.round(pos);
+        strip.style.transform = `translateY(${-(pos - 1) * R}px)`;
+        if (idx !== last) { if (last >= 0) Sfx.tone(900 + (idx % 3) * 120, .035, "square", .035); kids[last]?.classList.remove("on"); kids[idx]?.classList.add("on"); last = idx; }
+        if (t < 1 && box.isConnected) raf = requestAnimationFrame(step); else { kids[target]?.classList.add("on", "win"); res(); }
+      };
+      raf = requestAnimationFrame(step);
+    });
+  }
+  return { el: box, idle, spin, stop() { cancelAnimationFrame(raf); } };
+}
+/* ---------- vòng quay tên ---------- */
+function makeNameWheel() {
+  const cv = h("canvas", { class: "pw-cv" }), box = h("div", { class: "pwheel" }, cv, h("div", { class: "pw-ptr" }), h("div", { class: "pw-hub" }, clIcon("dice")));
+  let names = [], ang = 0, raf = 0;
+  const ctx = cv.getContext("2d");
+  function paint() {
+    const S_ = box.clientWidth || 360, d = Math.min(devicePixelRatio || 1, 2);
+    if (cv.width !== Math.round(S_ * d)) { cv.width = cv.height = Math.round(S_ * d); }
+    const W = cv.width, r = W / 2 - 6 * d; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, W);
+    ctx.translate(W / 2, W / 2); ctx.rotate(ang);
+    const n = Math.max(1, names.length), seg = Math.PI * 2 / n;
+    if (!names.length) { ctx.fillStyle = "rgba(127,140,170,.18)"; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); return; }
+    names.forEach((nm, i) => {
+      const a0 = -Math.PI / 2 + i * seg;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, r, a0, a0 + seg); ctx.closePath();
+      ctx.fillStyle = AV_COLORS[i % AV_COLORS.length]; ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1.5 * d; ctx.stroke();
+      ctx.save(); ctx.rotate(a0 + seg / 2); ctx.fillStyle = "#fff";
+      const fs = clamp(Math.min(r * seg * .55, r / 9), 9 * d, 26 * d); ctx.font = `700 ${fs}px "Be Vietnam Pro", system-ui, sans-serif`;
+      ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      const label = n <= 14 ? nm : givenName(nm); let t = label;
+      while (ctx.measureText(t).width > r * .68 && t.length > 2) t = t.slice(0, -1);
+      ctx.fillText(t === label ? t : t + "…", r - 14 * d, 0); ctx.restore();
+    });
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.lineWidth = 6 * d; ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.stroke();
+  }
+  function set(list) { names = list.slice(); paint(); }
+  function spin(winner, ms = 4600) {
+    return new Promise(res => {
+      const i = names.indexOf(winner); if (i < 0) { res(); return; }
+      const seg = Math.PI * 2 / names.length, from = ang;
+      const want = -(i + .5) * seg + (Math.random() - .5) * seg * .6;
+      let delta = ((want - from) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2); delta += Math.PI * 2 * 6;
+      const t0 = performance.now(); let last = -1;
+      const ease = t => 1 - Math.pow(1 - t, 3.6);
+      const step = now => {
+        const t = Math.min(1, (now - t0) / ms); ang = from + delta * ease(t); paint();
+        const idx = Math.floor(((((-ang - Math.PI * 0) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / seg);
+        if (idx !== last) { if (last >= 0) Sfx.tone(1300, .03, "square", .035); last = idx; }
+        if (t < 1 && box.isConnected) raf = requestAnimationFrame(step); else res();
+      };
+      raf = requestAnimationFrame(step);
+    });
+  }
+  return { el: box, set, spin, paint, stop() { cancelAnimationFrame(raf); } };
+}
+
+const CLP = { tab: null, busy: false, last: [], present: false };
 function ClassPage() {
   navPage = "class";
   setScreen("class", st => {
-    setTitle("Học sinh & điểm", "Danh sách lớp, gọi tên ngẫu nhiên và bảng xếp hạng buổi học");
-    const ta = h("textarea", { id: "roster", spellcheck: "false", placeholder: "Mỗi dòng một tên, ví dụ:\nNguyễn An\nTrần Bình\nLê Chi" }); ta.value = CLS.roster.join("\n");
-    const info = h("small", { class: "muted" }, `${CLS.roster.length} học sinh`);
-    ta.addEventListener("input", () => { info.textContent = `${ta.value.split(/\n/).map(x => x.trim()).filter(Boolean).length} học sinh (chưa lưu)`; });
-    const save = on(h("button", { class: "btn primary sm", "data-hit": true }, "Lưu danh sách"), () => {
-      CLS.roster = [...new Set(ta.value.split(/\n/).map(x => x.trim()).filter(Boolean))]; saveCls(); toast(`Đã lưu ${CLS.roster.length} học sinh`); ClassPage();
-    });
-    // gọi tên ngẫu nhiên
-    const big = h("div", { style: "font-family:var(--display);font-size:clamp(30px,4vw,52px);font-weight:800;min-height:1.3em;text-align:center;color:var(--amber-ink)" }, "—");
-    const ts = [];
-    const call = on(h("button", { class: "btn lg", "data-hit": true, disabled: !CLS.roster.length }, "Gọi tên ngẫu nhiên"), () => {
-      let k = 0; const n = 18;
-      const tick = () => { big.textContent = CLS.roster[Math.random() * CLS.roster.length | 0]; Sfx.tick(); if (++k < n) ts.push(setTimeout(tick, 35 + k * k * 1.1)); else { Sfx.right(); FX.burstEl(big, 30); Play.player = big.textContent; } };
-      tick();
-    });
-    // bảng xếp hạng
-    const rows = Object.entries(CLS.scores).sort((a, b) => b[1].score - a[1].score), max = rows[0]?.[1].score || 1;
-    const lb = rows.length ? h("div", { class: "tablewrap" }, h("table", { class: "lb" }, h("thead", {}, h("tr", {}, h("th", {}, "Hạng"), h("th", {}, "Học sinh"), h("th", {}, "Điểm"), h("th", {}, ""), h("th", {}, "Lượt chơi"))),
-      h("tbody", {}, rows.map(([n, r], i) => h("tr", {}, h("td", {}, h("span", { class: "rank" + (i < 3 ? " r" + (i + 1) : "") }, i + 1)), h("td", {}, h("b", {}, n)), h("td", {}, h("b", {}, vi(r.score))),
-        h("td", { style: "width:30%" }, h("div", { class: "bar", html: `<i style="width:${Math.max(3, r.score / max * 100)}%"></i>` })), h("td", { class: "muted" }, r.plays))))))
-      : h("p", { class: "muted", style: "margin:0" }, "Chưa có điểm. Chọn tên người chơi trước mỗi lượt để điểm được cộng vào đây.");
-    let armed = false;
-    const reset = on(h("button", { class: "btn sm danger", "data-hit": true }, "Bắt đầu buổi học mới (xóa điểm)"), () => {
-      if (!armed) { armed = true; reset.textContent = "Bấm lần nữa để xóa điểm"; ts.push(setTimeout(() => { armed = false; reset.textContent = "Bắt đầu buổi học mới (xóa điểm)"; }, 3000)); return; }
-      CLS.scores = {}; saveCls(); toast("Đã xóa điểm buổi học"); ClassPage();
-    });
-    // kỷ lục theo trò chơi
-    const bests = store.get("lhvt2.best", {}), rec = [];
-    for (const [k, v] of Object.entries(bests)) { const [sid, gid] = k.split(":"), s = SETS.find(x => x.id === sid), gm = GAMES.find(x => x.id === gid); if (s && gm) rec.push({ s, gm, v }); }
-    rec.sort((a, b) => b.v.score - a.v.score);
-    const recT = rec.length ? h("div", { class: "tablewrap" }, h("table", { class: "rec" }, h("thead", {}, h("tr", {}, h("th", {}, "Trò chơi"), h("th", {}, "Bộ đề"), h("th", {}, "Điểm"), h("th", {}, "Người lập"), h("th", {}, "Ngày"))),
-      h("tbody", {}, rec.map(r => h("tr", {}, h("td", {}, r.gm.name), h("td", {}, r.s.name), h("td", {}, h("b", {}, vi(r.v.score))), h("td", {}, r.v.by || "—"), h("td", { class: "muted" }, new Date(r.v.at).toLocaleDateString("vi-VN")))))))
-      : h("p", { class: "muted", style: "margin:0" }, "Chưa có kỷ lục nào.");
-    st.append(h("div", { class: "wrap" },
-      h("div", { class: "grid2" },
-        h("section", { class: "panel stack" }, h("h3", {}, "Danh sách lớp"), h("label", { class: "field", for: "roster" }, h("span", {}, "Mỗi dòng một tên (có thể dán từ Excel)"), ta, info), h("div", { class: "row" }, save)),
-        h("section", { class: "panel stack" }, h("h3", {}, "Gọi tên ngẫu nhiên"), h("p", { class: "muted", style: "margin:0" }, "Gọi một bạn lên chơi. Tên được gọi sẽ tự chọn làm người chơi cho lượt tiếp theo."), big, h("div", { class: "row", style: "justify-content:center" }, call))),
-      h("section", { class: "panel stack" }, h("div", { class: "sec-head" }, h("h3", {}, "Bảng xếp hạng buổi học"), rows.length ? reset : null), lb),
-      h("section", { class: "panel stack" }, h("h3", {}, "Kỷ lục từng trò chơi"), recT)));
-    return () => ts.forEach(clearTimeout);
+    const root = h("div", { class: "wrap cls" }); st.append(root);
+    const ts = []; let importState = null, editState = null, pasteOpen = false, renaming = false, q = "", reel = null, wheel = null, kpiEl = null;
+    const refreshKpis = () => { if (!kpiEl?.isConnected) return; const n = kpis(curClass()); kpiEl.replaceWith(n); kpiEl = n; };
+    const fileIn = h("input", { type: "file", accept: ".xlsx,.xlsm,.csv,.tsv,.txt,.xls", hidden: true });
+    fileIn.addEventListener("change", () => { const f = fileIn.files[0]; fileIn.value = ""; if (f) importFile(f); });
+    const onKey = e => { if (e.key === "Escape" && CLP.present) { CLP.present = false; draw(); } };
+    addEventListener("keydown", onKey);
+    if (!CLP.tab) CLP.tab = curClass().roster.length ? "pick" : "list";
+
+    function draw() {
+      if (CLP.busy) return;
+      const y = stage.scrollTop, c = curClass();
+      reel?.stop(); wheel?.stop();
+      root.innerHTML = ""; root.append(fileIn, h("datalist", { id: "dl-groups" }, groupsOf(c).map(g => h("option", { value: g }))));
+      setTitle("Học sinh & điểm", `${c.name} · ${c.roster.length} học sinh`);
+      kpiEl = kpis(c); root.append(header(c), kpiEl, tabs(c));
+      root.append(CLP.tab === "pick" ? pickerView(c) : CLP.tab === "rank" ? rankView(c) : listView(c));
+      stage.scrollTop = y;
+      if (CLP.tab === "pick") requestAnimationFrame(() => { reel?.idle(eligible(c)); wheel?.set(eligible(c)); });
+    }
+
+    /* ----- đầu trang: lớp đang chọn + đổi lớp ----- */
+    function header(c) {
+      const title = renaming
+        ? (() => { const inp = h("input", { type: "text", id: "cls-name", value: c.name, maxlength: 40, "aria-label": "Tên lớp" });
+            const save = () => { const v = inp.value.trim(); if (v) c.name = v; renaming = false; saveCls(); draw(); };
+            inp.addEventListener("keydown", e => { if (e.key === "Enter") save(); if (e.key === "Escape") { renaming = false; draw(); } });
+            setTimeout(() => { inp.focus(); inp.select(); }, 0);
+            return h("div", { class: "cls-rename" }, inp, on(h("button", { class: "btn sm primary", "data-hit": true }, "Lưu"), save)); })()
+        : h("h2", {}, c.name);
+      let armed = false;
+      const del = on(h("button", { class: "ibtn danger", "data-hit": true, title: "Xóa lớp này", "aria-label": "Xóa lớp" }, icon("trash")), () => {
+        if (!armed) { armed = true; del.classList.add("armed"); toast(`Bấm lần nữa để xóa lớp “${c.name}” cùng danh sách và điểm`, 2600); ts.push(setTimeout(() => { armed = false; del.classList.remove("armed"); }, 3000)); return; }
+        if (CLS.classes.length > 1) { CLS.classes = CLS.classes.filter(x => x !== c); CLS.cur = CLS.classes[0].id; }
+        else Object.assign(c, { roster: [], scores: {}, meta: {}, called: [], pool: null, absent: {}, name: "Lớp của tôi" });
+        saveCls(); toast("Đã xóa lớp"); draw();
+      });
+      const sw = h("div", { class: "cls-switch", role: "tablist", "aria-label": "Chọn lớp" },
+        CLS.classes.map(x => on(h("button", { class: "cls-chip" + (x.id === c.id ? " active" : ""), "data-hit": true, role: "tab", "aria-selected": x.id === c.id ? "true" : "false" }, h("b", {}, x.name), h("small", {}, x.roster.length)), () => {
+          if (x.id === CLS.cur) return; CLS.cur = x.id; Play.player = null; saveCls(); importState = editState = null; CLP.tab = x.roster.length ? CLP.tab : "list"; draw();
+        })),
+        on(h("button", { class: "cls-chip add", "data-hit": true, title: "Thêm lớp mới" }, clIcon("plus"), "Lớp mới"), () => {
+          const n = migrateCls({}).classes[0]; n.name = `Lớp mới ${CLS.classes.length + 1}`; CLS.classes.push(n); CLS.cur = n.id; renaming = true; CLP.tab = "list"; saveCls(); draw();
+        }));
+      return h("section", { class: "cls-head" },
+        h("div", { class: "cls-id" }, h("span", { class: "cls-badge", style: `--av:${avColor(c.name)}` }, c.name.replace(/^lớp\s*/i, "").slice(0, 4) || "L"),
+          h("div", { class: "cls-id-t" }, h("small", {}, "Lớp đang dạy"), title),
+          renaming ? null : h("div", { class: "row", style: "gap:4px" },
+            on(h("button", { class: "ibtn", "data-hit": true, title: "Đổi tên lớp", "aria-label": "Đổi tên lớp" }, clIcon("pen")), () => { renaming = true; draw(); }), del)),
+        sw);
+    }
+    function kpis(c) {
+      const pres = presentList(c).length, today = calledToday(c), total = c.roster.reduce((a, n) => a + scoreOf(c, n), 0);
+      const lead = c.roster.slice().sort((a, b) => scoreOf(c, b) - scoreOf(c, a))[0];
+      const k = (ic, l, v, sub, cls = "") => h("div", { class: "kpi cls-kpi " + cls }, h("span", { class: "kpi-ic", html: CL_IC[ic] }), h("div", {}, h("small", {}, l), h("b", {}, v), h("span", {}, sub)));
+      return h("div", { class: "kpis" },
+        k("users", "Sĩ số", vi(c.roster.length), groupsOf(c).length ? `${groupsOf(c).length} tổ / nhóm` : "học sinh"),
+        k("check", "Có mặt hôm nay", c.roster.length ? `${pres}/${c.roster.length}` : "–", c.roster.length - pres ? `vắng ${c.roster.length - pres}` : "đủ sĩ số", c.roster.length && pres === c.roster.length ? "good" : ""),
+        k("dice", "Đã gọi hôm nay", vi(today.length), `${new Set(today.map(x => x.n)).size} bạn khác nhau`),
+        k("trophy", "Điểm buổi học", vi(total), lead && scoreOf(c, lead) ? `dẫn đầu: ${lead}` : "chưa có điểm"));
+    }
+    function tabs(c) {
+      const t = (id, ic, label, n) => on(h("button", { class: "cls-tab" + (CLP.tab === id ? " active" : ""), "data-hit": true, role: "tab", "aria-selected": CLP.tab === id ? "true" : "false" }, clIcon(ic), h("span", {}, label), n != null ? h("b", {}, n) : null), () => { if (CLP.tab !== id) { CLP.tab = id; draw(); } });
+      return h("div", { class: "cls-tabs", role: "tablist" }, t("pick", "dice", "Gọi tên"), t("list", "list", "Danh sách lớp", c.roster.length), t("rank", "trophy", "Xếp hạng"));
+    }
+
+    /* ================= GỌI TÊN ================= */
+    function pickerView(c) {
+      if (!c.roster.length) return emptyRoster("Chưa có học sinh để gọi tên");
+      const base = eligible(c), mode = S.pick.mode;
+      reel = mode === "reel" ? makeReel() : null; wheel = mode === "wheel" ? makeNameWheel() : null;
+      const result = h("div", { class: "pick-result", "aria-live": "polite" });
+      const paintResult = () => {
+        result.innerHTML = "";
+        const ws = CLP.last.filter(n => c.roster.includes(n));
+        if (!ws.length) { result.append(h("p", { class: "pick-hint" }, base.length ? `Bấm “Gọi tên” hoặc chạm tay vào nút để chọn ngẫu nhiên trong ${base.length} bạn.` : "Không còn bạn nào phù hợp. Hãy kiểm tra điểm danh hoặc bộ lọc tổ.")); return; }
+        result.append(h("div", { class: "win-grid" + (ws.length > 1 ? " multi" : "") }, ws.map(n => winCard(c, n))));
+      };
+      const go = on(h("button", { class: "btn primary xl pick-go", "data-hit": true, disabled: !base.length }, clIcon("dice"), S.pick.count > 1 ? `Gọi ${S.pick.count} bạn` : "Gọi tên"), () => doPick());
+      async function doPick() {
+        if (CLP.busy) return;
+        const { names, newRound } = drawNames(c, S.pick.count); if (!names.length) { toast("Không còn bạn nào phù hợp để gọi"); return; }
+        if (newRound) toast("Cả lớp đã được gọi một lượt, bắt đầu vòng mới", 2200);
+        CLP.busy = true; go.disabled = true; CLP.last = []; paintResult(); result.classList.add("hidden");
+        TTS.stop(); Sfx.swish();
+        for (const n of names) {
+          if (reel) await reel.spin(n, base, names.length > 1 ? 1900 : 3200);
+          else await wheel.spin(n, names.length > 1 ? 2600 : 4600);
+          if (!root.isConnected) { CLP.busy = false; return; }
+          CLP.last.push(n); c.called.push({ n, t: Date.now() });
+          Sfx.win(); FX.burstEl((reel || wheel).el, 40);
+        }
+        if (c.called.length > 500) c.called = c.called.slice(-500);
+        saveCls(); CLP.busy = false; go.disabled = false;
+        result.classList.remove("hidden"); paintResult(); paintSide(); refreshKpis();
+        if (S.pick.speak) TTS.say((names.length > 1 ? "Mời các em " + names.join(", ") : "Mời em " + names[0]) + ".", true);
+      }
+      const modeSeg = h("div", { class: "seg-tabs" },
+        [["reel", "reel", "Máy quay số"], ["wheel", "wheel", "Vòng quay"]].map(([v, ic, l]) => on(h("button", { class: "seg-btn" + (mode === v ? " active" : ""), "data-hit": true }, clIcon(ic), l), () => { if (CLP.busy || S.pick.mode === v) return; S.pick.mode = v; saveS(); draw(); })));
+      const presentBtn = on(h("button", { class: "btn sm", "data-hit": true, title: "Phóng to toàn màn hình để chiếu cho cả lớp (Esc để thoát)" }, clIcon(CLP.present ? "close" : "screen"), CLP.present ? "Thoát trình chiếu" : "Trình chiếu"), () => { if (CLP.busy) return; CLP.present = !CLP.present; draw(); });
+      const stageBox = h("section", { class: "pick-stage" + (CLP.present ? " present" : "") },
+        h("div", { class: "pick-top" }, modeSeg, h("span", { class: "pick-class" }, c.name, S.pick.group ? ` · ${S.pick.group}` : ""), presentBtn),
+        h("div", { class: "pick-machine" }, (reel || wheel).el),
+        h("div", { class: "pick-actions" }, go),
+        result);
+      paintResult();
+      const side = h("aside", { class: "pick-side" });
+      function paintSide() {
+        side.innerHTML = "";
+        const groups = groupsOf(c);
+        const chk = (key, label, sub) => { const i = h("input", { type: "checkbox", id: "pk-" + key, checked: !!S.pick[key] }); i.addEventListener("change", () => { S.pick[key] = i.checked; saveS(); if (key !== "speak") draw(); }); return h("label", { class: "check", for: "pk-" + key, style: "align-items:flex-start" }, i, h("span", {}, label, sub ? h("small", { class: "muted", style: "display:block;font-weight:400" }, sub) : null)); };
+        const grpSel = h("select", { id: "pk-group", "aria-label": "Gọi theo tổ" }, h("option", { value: "" }, "Cả lớp"), groups.map(g => h("option", { value: g, selected: S.pick.group === g }, g)));
+        grpSel.addEventListener("change", () => { S.pick.group = grpSel.value; saveS(); draw(); });
+        side.append(h("section", { class: "panel stack", style: "gap:14px" }, h("h3", {}, "Tùy chọn gọi tên"),
+          h("div", { class: "field" }, h("span", {}, "Số bạn mỗi lần"), h("div", { class: "seg" }, [1, 2, 3, 4].map(k => { const inp = h("input", { type: "radio", name: "pkc", id: "pkc" + k, checked: S.pick.count === k }); inp.addEventListener("change", () => { S.pick.count = k; saveS(); draw(); }); return h("label", { for: "pkc" + k }, inp, h("span", {}, k)); }))),
+          groups.length ? h("label", { class: "field", for: "pk-group" }, h("span", {}, "Gọi trong"), grpSel) : null,
+          chk("present", "Chỉ gọi bạn có mặt", "Bạn vắng được đánh dấu ở tab Danh sách lớp."),
+          chk("noRepeat", "Không gọi lại cho tới khi cả lớp được gọi", "Công bằng: mỗi bạn một lượt rồi mới sang vòng mới."),
+          chk("speak", "Đọc tên thành tiếng", "“Mời em …” bằng giọng tiếng Việt.")));
+        const hist = calledToday(c).slice().reverse().slice(0, 10);
+        const rem = remainingInRound(c), tot = eligible(c).length;
+        side.append(h("section", { class: "panel stack", style: "gap:12px" },
+          h("div", { class: "sp-head" }, h("h3", {}, "Lượt gọi hôm nay"), h("small", { class: "muted" }, `${calledToday(c).length} lượt`)),
+          S.pick.noRepeat ? h("div", { class: "round-meter" }, h("div", { class: "rm-top" }, h("span", {}, "Vòng này còn"), h("b", {}, `${rem}/${tot} bạn`)), h("div", { class: "bar" }, h("i", { style: `width:${tot ? (tot - rem) / tot * 100 : 0}%` }))) : null,
+          hist.length ? h("ol", { class: "hist" }, hist.map(x => h("li", {}, avatar(x.n, "sm"), h("span", { class: "hist-n" }, x.n), h("small", {}, new Date(x.t).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }))))) : h("p", { class: "muted", style: "margin:0;font-size:14px" }, "Chưa gọi ai hôm nay."),
+          h("div", { class: "row" }, on(h("button", { class: "btn sm ghost", "data-hit": true }, "Bắt đầu vòng gọi mới"), () => { c.pool = null; saveCls(); toast("Đã đặt lại: tất cả các bạn đều có thể được gọi"); draw(); }))));
+      }
+      paintSide();
+      return h("div", { class: "pick-wrap" }, stageBox, side);
+    }
+    function winCard(c, n) {
+      const m = c.meta[n] || {}, cnt = callCount(c, n);
+      const pts = k => on(h("button", { class: "pts-btn", "data-hit": true, title: `Cộng ${k} điểm` }, `+${k}`), () => { award(n, k); toast(`+${k} điểm cho ${n}`, 1500); FX.burstEl(card, 14); paintScore(); refreshKpis(); });
+      const sc = h("b", { class: "wc-score" }), paintScore = () => { sc.textContent = vi(scoreOf(c, n)) + " điểm"; };
+      const card = h("div", { class: "win-card" },
+        avatar(n, "xl"),
+        h("div", { class: "wc-body" },
+          h("small", { class: "wc-lbl" }, "Mời em"),
+          h("div", { class: "wc-name" }, n),
+          h("div", { class: "wc-meta" }, m.group ? h("span", { class: "chipinfo" }, m.group) : null, h("span", { class: "chipinfo" }, `Được gọi ${cnt} lần`), sc)),
+        h("div", { class: "wc-act" },
+          on(h("button", { class: "btn primary", "data-hit": true }, clIcon("play"), "Mời chơi"), () => { Play.player = n; go("home"); toast(`Lượt của ${n}: chọn một trò chơi`, 2500); }),
+          h("div", { class: "pts-row" }, pts(1), pts(2), pts(5)),
+          on(h("button", { class: "btn sm ghost", "data-hit": true, title: "Đánh dấu vắng, lần sau không gọi nữa" }, "Vắng mặt"), () => { classAbsent(c)[n] = true; CLP.last = CLP.last.filter(x => x !== n); const li = c.called.map(x => x.n).lastIndexOf(n); if (li >= 0) c.called.splice(li, 1); saveCls(); toast(`Đã đánh dấu ${n} vắng mặt`); draw(); })));
+      paintScore(); return card;
+    }
+
+    /* ================= DANH SÁCH LỚP ================= */
+    function emptyRoster(title) {
+      const dz = h("label", { class: "dropzone cls-drop", for: "cls-file" },
+        h("span", { class: "dz-ico", html: '<svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13l2 2 4-4"/></svg>' }),
+        h("b", {}, title), h("span", { class: "muted" }, "Kéo thả file Excel danh sách lớp vào đây, hoặc bấm để chọn file"), h("small", { class: "muted" }, "Nhận .xlsx và .csv · tự nhận cột “Họ và tên”, “Họ / Tên”, “Tổ”, “Giới tính”"));
+      dz.addEventListener("click", e => { e.preventDefault(); fileIn.click(); });
+      dropable(dz);
+      return h("section", { class: "panel stack cls-empty" }, dz,
+        h("div", { class: "row", style: "justify-content:center" },
+          on(h("button", { class: "btn", "data-hit": true }, clIcon("userPlus"), "Thêm từng bạn"), () => { CLP.tab = "list"; editState = { name: "", group: "", gender: "", note: "" }; draw(); }),
+          on(h("button", { class: "btn", "data-hit": true }, clIcon("paste"), "Dán danh sách"), () => { CLP.tab = "list"; pasteOpen = true; draw(); }),
+          on(h("button", { class: "btn ghost", "data-hit": true }, icon("down"), "Tải file mẫu Excel"), rosterTemplate)));
+    }
+    function dropable(el) {
+      ["dragenter", "dragover"].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); el.classList.add("over"); }));
+      ["dragleave", "drop"].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); el.classList.remove("over"); }));
+      el.addEventListener("drop", e => { const f = e.dataTransfer?.files?.[0]; if (f) importFile(f); });
+    }
+    function listView(c) {
+      const wrap = h("div", { class: "stack", style: "gap:16px" }); dropable(wrap);
+      if (importState) wrap.append(importPanel(c));
+      if (pasteOpen) wrap.append(pastePanel(c));
+      if (editState) wrap.append(editPanel(c));
+      if (!c.roster.length && !importState && !pasteOpen && !editState) { wrap.append(emptyRoster(`Lớp “${c.name}” chưa có học sinh`)); return wrap; }
+      if (!c.roster.length) return wrap;
+      const search = h("input", { type: "search", id: "cls-q", placeholder: "Tìm học sinh…", value: q, "aria-label": "Tìm học sinh" });
+      const tbody = h("tbody");
+      search.addEventListener("input", () => { q = search.value; paintRows(); });
+      const absent = classAbsent(c), hasGender = c.roster.some(n => c.meta[n]?.gender);
+      wrap.append(h("div", { class: "lib-top" },
+        h("div", { class: "row" }, search,
+          on(h("button", { class: "btn sm primary", "data-hit": true }, clIcon("userPlus"), "Thêm học sinh"), () => { editState = { name: "", group: "", gender: "", note: "" }; pasteOpen = false; draw(); }),
+          on(h("button", { class: "btn sm", "data-hit": true }, icon("up"), "Nhập từ Excel"), () => fileIn.click()),
+          on(h("button", { class: "btn sm" + (pasteOpen ? " on" : ""), "data-hit": true }, clIcon("paste"), "Dán danh sách"), () => { pasteOpen = !pasteOpen; editState = null; draw(); })),
+        h("div", { class: "row" },
+          on(h("button", { class: "btn sm ghost", "data-hit": true, title: "Sắp xếp theo tên (A → Z), giống sổ điểm" }, clIcon("sort"), "Xếp theo tên"), () => { c.roster.sort(viNameCmp); saveCls(); toast("Đã xếp danh sách theo tên A → Z"); draw(); }),
+          on(h("button", { class: "btn sm ghost", "data-hit": true }, icon("xls"), "Xuất Excel"), () => exportRoster(c)),
+          on(h("button", { class: "btn sm ghost", "data-hit": true }, icon("down"), "File mẫu"), rosterTemplate))));
+      const allIn = c.roster.every(n => !absent[n]);
+      wrap.append(h("div", { class: "lib-group roster" }, h("div", { class: "tablewrap" }, h("table", { class: "rt" },
+        h("thead", {}, h("tr", {}, h("th", { class: "c-no" }, "#"), h("th", {}, "Học sinh"), h("th", {}, "Tổ"), hasGender ? h("th", {}, "Giới tính") : null,
+          h("th", { class: "c-in" }, "Có mặt", allIn ? null : on(h("button", { class: "linkbtn th-all", "data-hit": true, title: "Đánh dấu cả lớp có mặt" }, "Tất cả"), () => { c.absent = {}; c.absentDate = todayStr(); saveCls(); toast("Đã đánh dấu cả lớp có mặt"); draw(); })),
+          h("th", { class: "c-num" }, "Được gọi"), h("th", { class: "c-num" }, "Điểm"), h("th", {}, ""))),
+        tbody))));
+      function paintRows() {
+        tbody.innerHTML = "";
+        const list = c.roster.map((n, i) => [n, i]).filter(([n]) => !q || matchQ(n + " " + (c.meta[n]?.group || "") + " " + (c.meta[n]?.note || ""), q));
+        if (!list.length) tbody.append(h("tr", {}, h("td", { colspan: 8, class: "muted", style: "text-align:center;padding:24px" }, `Không có học sinh nào khớp “${q}”`)));
+        for (const [n, i] of list) {
+          const m = c.meta[n] || {}, away = !!absent[n];
+          const sw = on(h("button", { class: "switch" + (away ? "" : " on"), role: "switch", "aria-checked": away ? "false" : "true", "data-hit": true, title: away ? "Vắng — bấm để đánh dấu có mặt" : "Có mặt — bấm để đánh dấu vắng" }, h("i")), () => { if (away) delete absent[n]; else absent[n] = true; saveCls(); paintRows(); });
+          let armed = false;
+          const del = on(h("button", { class: "ibtn danger", "data-hit": true, title: "Xóa học sinh", "aria-label": "Xóa " + n }, icon("trash")), () => {
+            if (!armed) { armed = true; del.classList.add("armed"); toast(`Bấm lần nữa để xóa ${n}`, 2000); ts.push(setTimeout(() => { armed = false; del.classList.remove("armed"); }, 2800)); return; }
+            removeStudent(c, n); saveCls(); toast(`Đã xóa ${n}`); draw();
+          });
+          tbody.append(h("tr", { class: away ? "away" : "" },
+            h("td", { class: "c-no" }, i + 1),
+            h("td", {}, h("div", { class: "rt-name" }, avatar(n, "sm"), h("div", {}, h("b", {}, n), m.note ? h("small", {}, m.note) : null))),
+            h("td", {}, m.group ? h("span", { class: "grp", style: `--av:${avColor(m.group)}` }, m.group) : h("span", { class: "muted" }, "—")),
+            hasGender ? h("td", { class: "muted" }, m.gender || "—") : null,
+            h("td", { class: "c-in" }, sw),
+            h("td", { class: "c-num" }, callCount(c, n) || h("span", { class: "muted" }, "0")),
+            h("td", { class: "c-num" }, h("b", {}, vi(scoreOf(c, n)))),
+            h("td", { class: "c-act" },
+              on(h("button", { class: "ibtn", "data-hit": true, title: "Sửa", "aria-label": "Sửa " + n }, icon("edit")), () => { editState = { orig: n, name: n, group: m.group || "", gender: m.gender || "", note: m.note || "" }; pasteOpen = false; draw(); stage.scrollTo({ top: 0, behavior: "smooth" }); }),
+              del)));
+        }
+      }
+      paintRows();
+      wrap.append(h("p", { class: "muted", style: "margin:0;font-size:13px" }, "Điểm danh tự đặt lại mỗi ngày. Mẹo: có thể kéo thả file Excel vào bất kỳ đâu trên trang này để nhập."));
+      return wrap;
+    }
+    function editPanel(c) {
+      const E = editState, isNew = !E.orig;
+      const name = h("input", { type: "text", id: "st-name", value: E.name, placeholder: "Ví dụ: Lò Văn An", maxlength: 60 });
+      const grp = h("input", { type: "text", id: "st-group", value: E.group, list: "dl-groups", placeholder: "Ví dụ: Tổ 1" });
+      const note = h("input", { type: "text", id: "st-note", value: E.note, placeholder: "Ví dụ: Lớp trưởng" });
+      let gender = E.gender;
+      const gSeg = h("div", { class: "seg" }, [["", "Không ghi"], ["Nam", "Nam"], ["Nữ", "Nữ"]].map(([v, l]) => { const i = h("input", { type: "radio", name: "stg", id: "stg" + (v || "x"), checked: gender === v }); i.addEventListener("change", () => gender = v); return h("label", { for: "stg" + (v || "x") }, i, h("span", {}, l)); }));
+      const save = keepOpen => {
+        const n = cleanName(name.value); if (!n) { toast("Nhập họ và tên học sinh"); name.focus(); return; }
+        if (n !== E.orig && c.roster.includes(n)) { toast("Lớp đã có bạn tên này. Thêm chữ phân biệt, ví dụ “An B”."); name.focus(); return; }
+        const meta = pickMeta({ group: grp.value, gender, note: note.value });
+        if (isNew) { c.roster.push(n); c.pool = null; } else renameStudent(c, E.orig, n);
+        c.meta[n] = meta; saveCls(); Sfx.right();
+        toast(isNew ? `Đã thêm ${n}` : `Đã lưu ${n}`, 1500);
+        editState = keepOpen ? { name: "", group: grp.value, gender: "", note: "" } : null; draw();
+        if (keepOpen) setTimeout(() => $("#st-name")?.focus(), 0);
+      };
+      name.addEventListener("keydown", e => { if (e.key === "Enter") save(isNew); });
+      setTimeout(() => name.focus(), 0);
+      return h("section", { class: "panel stack edit-panel" },
+        h("div", { class: "sp-head" }, h("h3", {}, isNew ? "Thêm học sinh" : "Sửa thông tin học sinh"), on(h("button", { class: "ibtn", "data-hit": true, "aria-label": "Đóng" }, clIcon("close")), () => { editState = null; draw(); })),
+        h("div", { class: "edit-grid" },
+          h("label", { class: "field", for: "st-name" }, h("span", {}, "Họ và tên"), name),
+          h("label", { class: "field", for: "st-group" }, h("span", {}, "Tổ / nhóm"), grp),
+          h("div", { class: "field" }, h("span", {}, "Giới tính"), gSeg),
+          h("label", { class: "field", for: "st-note" }, h("span", {}, "Ghi chú"), note)),
+        h("div", { class: "row" },
+          on(h("button", { class: "btn primary sm", "data-hit": true }, isNew ? "Thêm và nhập tiếp" : "Lưu thay đổi"), () => save(isNew)),
+          isNew ? on(h("button", { class: "btn sm", "data-hit": true }, "Thêm và đóng"), () => save(false)) : null,
+          isNew ? h("small", { class: "muted" }, "Nhấn Enter để thêm nhanh từng bạn") : null));
+    }
+    function pastePanel(c) {
+      const ta = h("textarea", { id: "cls-paste", spellcheck: "false", placeholder: "Mỗi dòng một học sinh. Có thể dán thẳng từ Excel (cột Họ và tên, cột Tổ):\nNguyễn Văn An\tTổ 1\nTrần Thị Bình\tTổ 2\nLò Văn Chiến" });
+      const info = h("small", { class: "muted" }, "");
+      const parse = () => ta.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+        const cells = l.split(/\t|\s\|\s|;/).map(x => x.trim()).filter(Boolean);
+        const nameCell = cells.find(x => /\p{L}/u.test(x) && !/^\d+$/.test(x)) || "";
+        const rest = cells.filter(x => x !== nameCell && !/^\d+$/.test(x));
+        return { name: nameCell, group: rest[0] || "" };
+      }).filter(s => cleanName(s.name));
+      ta.addEventListener("input", () => { info.textContent = `${parse().length} học sinh`; });
+      const apply = mode => { const list = parse(); if (!list.length) { toast("Chưa có tên nào"); return; } const r = addStudents(c, list, mode); saveCls(); pasteOpen = false; toast(`Đã thêm ${r.added} học sinh` + (r.updated ? `, cập nhật ${r.updated}` : "") + (r.renamed ? `, ${r.renamed} tên trùng được thêm số` : ""), 3000); Sfx.right(); draw(); };
+      setTimeout(() => ta.focus(), 0);
+      return h("section", { class: "panel stack" },
+        h("div", { class: "sp-head" }, h("h3", {}, "Dán danh sách học sinh"), on(h("button", { class: "ibtn", "data-hit": true, "aria-label": "Đóng" }, clIcon("close")), () => { pasteOpen = false; draw(); })),
+        ta, info,
+        h("div", { class: "row" },
+          on(h("button", { class: "btn primary sm", "data-hit": true }, "Thêm vào danh sách"), () => apply("merge")),
+          c.roster.length ? on(h("button", { class: "btn sm", "data-hit": true }, "Thay thế toàn bộ danh sách"), () => apply("replace")) : null));
+    }
+    async function importFile(f) {
+      importState = { loading: f.name }; CLP.tab = "list"; editState = null; pasteOpen = false; draw();
+      try {
+        const ext = (f.name.split(".").pop() || "").toLowerCase();
+        let sheets;
+        if (ext === "xls") throw new Error("Tệp .xls là định dạng Excel đời cũ. Mở bằng Excel → Lưu thành (Save As) → Sổ làm việc Excel (.xlsx) rồi nhập lại.");
+        if (ext === "xlsx" || ext === "xlsm") sheets = await XL.read(await f.arrayBuffer());
+        else if (["csv", "tsv", "txt"].includes(ext)) sheets = [{ name: f.name, rows: XL.parseCSV(await f.text()) }];
+        else throw new Error("Chỉ nhận file Excel (.xlsx) hoặc CSV.");
+        let best = null;
+        for (const sh of sheets) { const r = parseRosterRows(sh.rows); if (!best || r.students.length > best.students.length) best = { ...r, sheet: sh.name }; }
+        if (!best || !best.students.length) throw new Error("Không tìm thấy tên học sinh trong file. Hãy để tên ở cột có tiêu đề “Họ và tên” (hoặc hai cột “Họ” và “Tên”), hoặc dùng file mẫu.");
+        const base = f.name.replace(/\.[^.]+$/, ""), m = base.match(/(\d{1,2}\s*[A-Za-zĐđ]\s*\d{0,2})/);
+        importState = { ...best, file: f.name, newName: best.clsName || (m ? "Lớp " + m[1].replace(/\s+/g, "").toUpperCase() : base) };
+      } catch (e) { importState = { error: e.message || String(e), file: f.name }; Sfx.wrong(); }
+      draw();
+    }
+    function importPanel(c) {
+      const P = importState;
+      const close = on(h("button", { class: "ibtn", "data-hit": true, "aria-label": "Đóng" }, clIcon("close")), () => { importState = null; draw(); });
+      if (P.loading) return h("section", { class: "panel imp-box" }, h("div", { class: "spin", style: "width:28px;height:28px;border-width:4px" }), h("span", {}, `Đang đọc ${P.loading}…`));
+      if (P.error) return h("section", { class: "panel imp-box bad" }, h("div", {}, h("b", {}, `Không nhập được “${P.file}”`), h("p", { style: "margin:4px 0 0" }, P.error)), h("div", { class: "row" }, on(h("button", { class: "btn sm", "data-hit": true }, icon("down"), "Tải file mẫu"), rosterTemplate), close));
+      let mode = c.roster.length ? "merge" : "replace";
+      const nameIn = h("input", { type: "text", id: "imp-cls", value: P.newName, maxlength: 40 });
+      const opt = (v, t, s) => { const i = h("input", { type: "radio", name: "impm", id: "impm-" + v, checked: mode === v }); i.addEventListener("change", () => { mode = v; nameIn.disabled = v !== "new"; }); return h("label", { class: "imp-mode", for: "impm-" + v }, i, h("span", {}, h("b", {}, t), h("small", {}, s))); };
+      nameIn.disabled = mode !== "new";
+      const groups = [...new Set(P.students.map(s => s.group).filter(Boolean))];
+      const dupInFile = P.students.length - new Set(P.students.map(s => s.name)).size;
+      return h("section", { class: "panel stack imp-panel" },
+        h("div", { class: "sp-head" }, h("div", {}, h("h3", {}, `Đọc được ${P.students.length} học sinh`), h("small", { class: "muted" }, `từ “${P.file}”${P.sheet && P.sheet !== P.file ? `, trang “${P.sheet}”` : ""}`)), close),
+        h("div", { class: "chips" },
+          P.cols.split ? h("span", { class: "chipinfo ok" }, "Ghép cột Họ + Tên") : null,
+          groups.length ? h("span", { class: "chipinfo ok" }, `${groups.length} tổ / nhóm`) : null,
+          P.cols.gender ? h("span", { class: "chipinfo ok" }, "Có giới tính") : null,
+          P.skipped ? h("span", { class: "chipinfo" }, `Bỏ qua ${P.skipped} dòng không phải tên`) : null,
+          dupInFile ? h("span", { class: "chipinfo" }, `${dupInFile} tên trùng sẽ được thêm số`) : null),
+        h("div", { class: "imp-preview" }, P.students.slice(0, 18).map(s => h("span", { class: "imp-st" }, avatar(s.name, "xs"), s.name)), P.students.length > 18 ? h("span", { class: "imp-more" }, `+${P.students.length - 18} bạn khác`) : null),
+        h("div", { class: "imp-modes" },
+          c.roster.length ? opt("merge", `Thêm vào lớp “${c.name}”`, "Giữ danh sách hiện có, bạn nào trùng tên thì cập nhật tổ / ghi chú") : null,
+          opt("replace", c.roster.length ? `Thay thế danh sách lớp “${c.name}”` : `Đưa vào lớp “${c.name}”`, c.roster.length ? `Xóa ${c.roster.length} học sinh hiện có và dùng danh sách mới` : "Lớp đang trống"),
+          h("div", { class: "imp-new" }, opt("new", "Tạo lớp mới", "Giữ nguyên lớp hiện tại"), nameIn)),
+        h("div", { class: "row" },
+          on(h("button", { class: "btn primary", "data-hit": true }, clIcon("check"), "Nhập danh sách"), () => {
+            let target = c;
+            if (mode === "new") { target = migrateCls({}).classes[0]; target.name = nameIn.value.trim() || P.newName || "Lớp mới"; CLS.classes.push(target); CLS.cur = target.id; }
+            const r = addStudents(target, P.students, mode === "new" ? "replace" : mode);
+            saveCls(); importState = null; Sfx.win(); FX.rain();
+            toast(`Đã nhập ${r.added} học sinh vào “${target.name}”` + (r.updated ? `, cập nhật ${r.updated} bạn` : ""), 3500);
+            draw();
+          }),
+          on(h("button", { class: "btn", "data-hit": true }, "Hủy"), () => { importState = null; draw(); })));
+    }
+
+    /* ================= XẾP HẠNG ================= */
+    function rankView(c) {
+      const rows = c.roster.map(n => ({ n, s: scoreOf(c, n), p: c.scores[n]?.plays || 0, b: c.scores[n]?.bonus || 0, g: c.meta[n]?.group || "" })).sort((a, b) => b.s - a.s || b.p - a.p || viNameCmp(a.n, b.n));
+      const scored = rows.filter(r => r.s > 0 || r.p > 0);
+      const wrap = h("div", { class: "stack", style: "gap:18px" });
+      let armed = false;
+      const reset = on(h("button", { class: "btn sm danger", "data-hit": true }, "Bắt đầu buổi học mới"), () => {
+        if (!armed) { armed = true; reset.textContent = "Bấm lần nữa để xóa điểm buổi học"; ts.push(setTimeout(() => { armed = false; reset.textContent = "Bắt đầu buổi học mới"; }, 3000)); return; }
+        c.scores = {}; saveCls(); toast("Đã xóa điểm buổi học, sẵn sàng buổi mới"); draw();
+      });
+      wrap.append(h("div", { class: "lib-top" },
+        h("div", {}, h("h3", { style: "margin:0" }, "Bảng xếp hạng buổi học"), h("small", { class: "muted" }, "Điểm từ các trò chơi cộng với điểm thưởng giáo viên trao")),
+        h("div", { class: "row" },
+          on(h("button", { class: "btn sm", "data-hit": true, disabled: !c.roster.length }, icon("xls"), "Xuất bảng điểm"), () => {
+            const data = [["Hạng", "Họ và tên", "Tổ", "Điểm", "Lượt chơi", "Điểm thưởng"], ...rows.map((r, i) => [String(i + 1), r.n, r.g, String(r.s), String(r.p), String(r.b)])];
+            downloadBlob(XL.write([{ name: "Xếp hạng", header: true, widths: [7, 32, 12, 10, 11, 13], rows: data }]), `${c.name} - xep hang - ${todayStr()}.xlsx`); toast("Đã xuất bảng điểm");
+          }), scored.length ? reset : null)));
+      if (!c.roster.length) { wrap.append(emptyRoster("Thêm học sinh để bắt đầu tính điểm")); return wrap; }
+      if (!scored.length) wrap.append(h("section", { class: "panel empty" }, h("span", { class: "st-empty-ic", html: CL_IC.trophy }), h("b", {}, "Chưa có điểm trong buổi học này"),
+        h("p", { class: "muted" }, "Chọn tên người chơi trước mỗi lượt chơi, hoặc trao điểm thưởng ngay khi gọi tên, điểm sẽ hiện ở đây."),
+        h("div", { class: "row", style: "justify-content:center" }, on(h("button", { class: "btn primary", "data-hit": true }, clIcon("dice"), "Gọi tên học sinh"), () => { CLP.tab = "pick"; draw(); }))));
+      else {
+        const top = scored.slice(0, 3), order = [1, 0, 2].filter(i => top[i]);
+        wrap.append(h("section", { class: "podium" }, order.map(i => { const r = top[i]; return h("div", { class: `pod p${i + 1}` },
+          h("div", { class: "pod-av" }, avatar(r.n, "lg"), h("span", { class: "pod-medal" }, i + 1)),
+          h("b", { class: "pod-name" }, r.n), h("span", { class: "pod-score" }, vi(r.s), h("small", {}, " điểm")),
+          h("div", { class: "pod-base" }, h("span", {}, ["Hạng nhất", "Hạng nhì", "Hạng ba"][i]))); })));
+      }
+      const groups = groupsOf(c);
+      const max = Math.max(1, ...rows.map(r => r.s));
+      const list = h("section", { class: "lib-group rank-list" }, rows.map((r, i) => h("div", { class: "rk-row" + (i < 3 && r.s ? " top" : "") },
+        h("span", { class: "rank" + (i < 3 && r.s ? " r" + (i + 1) : "") }, i + 1),
+        avatar(r.n, "sm"),
+        h("div", { class: "rk-main" }, h("b", {}, r.n), h("small", {}, [r.g, r.p ? `${r.p} lượt chơi` : "", r.b ? `${r.b > 0 ? "+" : ""}${r.b} thưởng` : ""].filter(Boolean).join(" · ") || "Chưa có điểm")),
+        h("div", { class: "bar rk-bar" }, h("i", { style: `width:${r.s / max * 100}%` })),
+        h("b", { class: "rk-score" }, vi(r.s)),
+        h("div", { class: "rk-adj" },
+          on(h("button", { class: "pts-btn minus", "data-hit": true, title: "Trừ 1 điểm", "aria-label": "Trừ 1 điểm " + r.n }, "−1"), () => { award(r.n, -1); draw(); }),
+          on(h("button", { class: "pts-btn", "data-hit": true, title: "Cộng 1 điểm", "aria-label": "Cộng 1 điểm " + r.n }, "+1"), () => { award(r.n, 1); draw(); })))));
+      const sideBits = [];
+      if (groups.length) {
+        const gs = groups.map(g => { const m = rows.filter(r => r.g === g); const t = m.reduce((a, r) => a + r.s, 0); return { g, t, avg: m.length ? t / m.length : 0, n: m.length }; }).sort((a, b) => b.t - a.t);
+        const gmax = Math.max(1, ...gs.map(x => x.t));
+        sideBits.push(h("section", { class: "panel stack", style: "gap:12px" }, h("h3", {}, "Thi đua theo tổ"),
+          gs.map((x, i) => h("div", { class: "grp-row" }, h("div", { class: "grp-top" }, h("span", { class: "grp", style: `--av:${avColor(x.g)}` }, x.g), h("b", {}, vi(x.t)), h("small", { class: "muted" }, `TB ${vi(Math.round(x.avg * 10) / 10)} · ${x.n} bạn`)), h("div", { class: "bar" }, h("i", { style: `width:${x.t / gmax * 100}%;background:${avColor(x.g)}` }))))));
+      }
+      const bests = store.get("lhvt2.best", {}), rec = [];
+      for (const [k, v] of Object.entries(bests)) { const [sid, gid] = k.split(":"), s = SETS.find(x => x.id === sid), gm = GAMES.find(x => x.id === gid); if (s && gm) rec.push({ s, gm, v }); }
+      rec.sort((a, b) => b.v.score - a.v.score);
+      sideBits.push(h("section", { class: "panel stack", style: "gap:10px" }, h("h3", {}, "Kỷ lục trò chơi"),
+        rec.length ? rec.slice(0, 8).map(r => h("div", { class: "rec-row", style: `--c:${r.gm.color}` }, h("span", { class: "rec-ic", html: r.gm.icon }), h("div", {}, h("b", {}, r.gm.name), h("small", {}, `${r.v.by || "Không ghi tên"} · ${r.s.name}`)), h("b", { class: "rec-sc" }, vi(r.v.score))))
+          : h("p", { class: "muted", style: "margin:0;font-size:14px" }, "Chưa có kỷ lục nào.")));
+      wrap.append(h("div", { class: "rank-grid" }, list, h("div", { class: "stack", style: "gap:18px" }, sideBits)));
+      return wrap;
+    }
+
+    draw();
+    return () => { CLP.busy = false; CLP.present = false; reel?.stop(); wheel?.stop(); removeEventListener("keydown", onKey); ts.forEach(clearTimeout); };
   });
 }
 
@@ -3534,7 +4115,7 @@ const Cloud = (() => {
       ["lhvt2.sets", "lhvt2.current", "lhvt4.class", "lhvt2.best", "lhvt4.recentGames", "lhvt4.lib", "lhvt6.qstats"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
       quiet = true;
       SETS = JSON.parse(JSON.stringify(SAMPLE_SETS)).map(migrateSet); currentId = SETS[0].id;
-      CLS.roster = []; CLS.scores = {}; CLS.player = null; QSTATS = {};
+      Object.assign(CLS, migrateCls({})); QSTATS = {};
       store.set(SETS_KEY, SETS); store.set("lhvt2.current", currentId); store.set("lhvt4.class", CLS);
       quiet = false;
     }
@@ -3551,14 +4132,14 @@ const Cloud = (() => {
   const localSets = () => JSON.parse(JSON.stringify(SETS));
   const kvLocal = key => {
     if (key === "lhvt2.settings") { const o = {}; PREF_KEYS.forEach(k => { if (k in S) o[k] = S[k]; }); return o; }
-    if (key === "lhvt4.class") return { roster: CLS.roster, scores: CLS.scores };
+    if (key === "lhvt4.class") return { classes: CLS.classes, cur: CLS.cur };
     if (key === QSTAT_KEY) return QSTATS;
     return store.get(key, key === "lhvt2.best" ? {} : []);
   };
   function applyKV(key, val) {
     quiet = true;
     if (key === "lhvt2.settings") { PREF_KEYS.forEach(k => { if (val && k in val) S[k] = val[k]; }); store.set(key, S); try { applyTheme(); applyRail(); } catch (e) {} }
-    else if (key === "lhvt4.class") { CLS.roster = Array.isArray(val?.roster) ? val.roster : []; CLS.scores = val?.scores || {}; store.set(key, CLS); }
+    else if (key === "lhvt4.class") { const m = migrateCls(val); CLS.classes = m.classes; if (!CLS.classes.find(c => c.id === CLS.cur)) CLS.cur = m.cur; store.set(key, CLS); }
     else { store.set(key, val); if (key === QSTAT_KEY) QSTATS = val && typeof val === "object" ? val : {}; }
     quiet = false;
   }
