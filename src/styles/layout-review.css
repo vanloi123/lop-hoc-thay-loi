@@ -1,0 +1,87 @@
+/* ================= RÀ SOÁT GIAO DIỆN (v4.7) ================= */
+/* menu trái: nút thu gọn + chế độ thu gọn chỉ còn biểu tượng */
+.rail-toggle{margin-top:auto;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;border:1px solid transparent;background:none;cursor:pointer;color:var(--faint);font-weight:600;font-size:13.5px}
+.rail-toggle svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none;transition:transform .2s}
+.rail-toggle:hover,.rail-toggle.g-hover{color:var(--text);background:var(--surface2)}
+@media (min-width:901px){
+  #app{transition:grid-template-columns .25s ease}
+  body.rail-mini #app{grid-template-columns:78px 1fr}
+  body.rail-mini.in-game #app{grid-template-columns:1fr}
+  body.rail-mini .rail{padding:16px 10px;align-items:center}
+  body.rail-mini .logo{padding:2px 0}
+  body.rail-mini .logo>div,body.rail-mini .nav-lbl,body.rail-mini .nav button span,body.rail-mini .rail-toggle span,body.rail-mini .rail-cam{display:none}
+  body.rail-mini .nav{gap:6px;margin-top:8px}
+  body.rail-mini .nav button{justify-content:center;width:52px;height:48px;padding:0}
+  body.rail-mini .rail-toggle{justify-content:center;width:52px;padding:10px 0}
+  body.rail-mini .rail-toggle svg{transform:scaleX(-1)}
+}
+/* sảnh: khối chào gọn, thẻ bộ đề gọn, hai khối cao cân nhau */
+.dash{align-items:stretch}
+.welcome{padding:28px 30px;grid-template-columns:1fr 280px;align-items:center}
+.welcome h2{font-size:clamp(26px,2.4vw,34px)}
+.welcome p.lead{font-size:15px;margin:10px 0 18px}
+.welcome .row .btn.lg{min-height:52px;font-size:16px;padding:0 22px}
+.stage-pv{background:var(--bg2)}
+.stage-pv .pv-empty{color:var(--muted)}
+.setcard{gap:12px;padding:20px}
+.setcard h3{font-size:20px}
+.setcard .counts{gap:6px}
+.setcard .counts .cnt{padding:7px 10px;display:flex;align-items:baseline;gap:6px}
+.setcard .counts .cnt b{font-size:17px}
+.setcard .counts .cnt small{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.setpick{max-height:172px}
+.meta.lv{color:var(--amber-ink);background:color-mix(in srgb,var(--amber) 14%,transparent)}
+/* màn giới thiệu: 2 cột, nút Bắt đầu luôn thấy ngay */
+.card.intro{max-width:1120px}
+.card.intro .gcover{height:104px}
+.card.intro .gbadge{width:58px;height:58px;padding:11px}
+.intro-body{display:grid;grid-template-columns:1.05fr 1fr;gap:28px;align-items:start}
+.intro-l,.intro-r{display:flex;flex-direction:column;gap:16px;min-width:0}
+.intro-l h2{font-size:clamp(28px,3vw,38px)}
+.intro-l>p{font-size:15.5px}
+.intro-l .howto{grid-template-columns:1fr}
+.intro-l .howto div{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:baseline;padding:10px 12px}
+.intro-r{order:0}
+.intro-actions{order:-1;padding-bottom:4px}
+.intro-actions .btn.primary{flex:1;min-height:60px;font-size:18px}
+@media (max-width:1000px){.intro-body{grid-template-columns:1fr}.intro-actions{order:9}}
+/* sắp xếp thứ tự / xếp chữ: ô và thẻ lớn hơn, cân giữa màn */
+.seq-slot{min-width:210px;min-height:78px;font-size:clamp(16px,1.6vw,21px)}
+.seq-slot .num{width:34px;height:34px;font-size:15px}
+.tok{padding:16px 24px;font-size:clamp(16px,1.8vw,22px)}
+.game .stack:has(> .seq-slots){flex:1;justify-content:center;gap:26px}
+.seq-pool{min-height:100px}
+/* nhịp chữ & khoảng cách chung */
+.sec-head h2{font-size:22px}
+.panel{padding:22px 24px}
+.tb-title h1{font-size:20px}
+.game{gap:14px}
+.qcard{padding:18px 26px}
+
+.welcome{display:flex;flex-direction:column;gap:22px;justify-content:space-between}
+.wl-top{display:grid;grid-template-columns:1fr 280px;gap:24px;align-items:center}
+.qsteps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.qstep{display:flex;align-items:center;gap:12px;text-align:left;padding:12px 14px;border-radius:14px;border:1px solid var(--border2);background:color-mix(in srgb,var(--surface) 70%,transparent);cursor:pointer;transition:border-color .15s,background .15s}
+.qstep:hover,.qstep.g-hover{border-color:var(--amber)}
+.qstep i{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:800;font-family:var(--display);background:var(--surface3);color:var(--muted)}
+.qstep.done i{background:var(--good);color:#fff}
+.qstep span{display:flex;flex-direction:column;min-width:0}
+.qstep b{font-size:14.5px}.qstep small{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.setpick{scroll-snap-type:y proximity}.sp-row{scroll-snap-align:start}
+.intro-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.intro-actions .btn{width:100%}
+.intro-actions .btn.primary{grid-column:1/-1;min-height:62px;font-size:19px}
+.intro-actions .btn:only-child{grid-column:1/-1}
+@media (max-width:1100px){.wl-top{grid-template-columns:1fr 220px}}
+@media (max-width:900px){.wl-top,.qsteps{grid-template-columns:1fr}}
+.qsteps{grid-template-columns:repeat(3,minmax(0,1fr))}
+.qstep{min-width:0}
+.wl-top{grid-template-columns:minmax(0,1fr) 340px}
+@media (max-width:1100px){.wl-top{grid-template-columns:minmax(0,1fr) 240px}}
+@media (max-width:900px){.wl-top,.qsteps{grid-template-columns:1fr}}
+
+/* nền khu vực chơi & mặt sau thẻ trí nhớ hợp cả hai giao diện */
+.arena{background:linear-gradient(180deg,color-mix(in srgb,var(--sky) 9%,transparent),color-mix(in srgb,var(--text) 6%,transparent))}
+body.light .mc-f{background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.25),transparent 50%),linear-gradient(135deg,#4f7fd1,#2f5bb0)}
+body.ar .arena{background:rgba(10,17,32,.1)}
+body.light .bubble{color:#0f1b2e;text-shadow:0 1px 2px rgba(255,255,255,.85);background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.95),rgba(255,255,255,.55) 30%,color-mix(in srgb,var(--c) 38%,white) 70%,color-mix(in srgb,var(--c) 65%,white));border-color:var(--c)}

@@ -1,0 +1,17 @@
+{
+  "name": "lop-hoc-thay-loi",
+  "private": true,
+  "version": "6.3.0",
+  "description": "Sân chơi ôn tập điều khiển bằng cử chỉ tay qua webcam: 23 trò chơi, soạn đề, bảng điểm lớp.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

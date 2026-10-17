@@ -1,0 +1,33 @@
+/* ================= v5.0 — Lưu trữ đám mây ================= */
+.cloud-chip .cic svg{width:18px;height:18px;display:block;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round}
+.cloud-chip{gap:8px}
+.cloud-chip[data-st=off] .cic{color:var(--faint)}
+.cloud-chip[data-st=ok] .cic{color:var(--good)}
+.cloud-chip[data-st=sync] .cic,.cloud-chip[data-st=pending] .cic{color:var(--sky);animation:cloudpulse 1s ease-in-out infinite alternate}
+.cloud-chip[data-st=offline] .cic{color:var(--warn)}
+.cloud-chip[data-st=error] .cic{color:var(--bad-ink)}
+@keyframes cloudpulse{to{opacity:.35}}
+body.in-game .cloud-chip{display:none}
+@media (max-width:1180px){.cloud-chip .lbltxt{display:none}}
+.cloud-panel{border-color:color-mix(in srgb,var(--sky) 35%,var(--border2))}
+.cloud-panel.busy{opacity:.7;pointer-events:none}
+.cloud-head{display:flex;gap:14px;align-items:flex-start}
+.cloud-head h3{margin:0 0 4px}
+.cloud-head p{margin:0;font-size:14.5px;max-width:75ch}
+.cloud-ic{flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--sky) 16%,transparent);color:var(--sky)}
+body.light .cloud-ic{color:#0369a1}
+.cloud-ic svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+.cloud-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cloud-grid input{width:100%}
+.cloud-msg{margin:0;font-size:14px;color:var(--muted);min-height:0}
+.cloud-msg:empty{display:none}
+.cloud-msg.bad{color:var(--bad-ink)}
+.cloud-status{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:var(--surface2)}
+.cloud-status i{width:12px;height:12px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px color-mix(in srgb,var(--good) 22%,transparent)}
+.cloud-status[data-st=sync] i,.cloud-status[data-st=pending] i{background:var(--sky)}
+.cloud-status[data-st=offline] i{background:var(--warn)}
+.cloud-status[data-st=error] i{background:var(--bad)}
+.cloud-status b{display:block}
+.linkbtn{background:none;border:none;padding:0;color:var(--sky);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
+body.light .linkbtn{color:#0369a1}
+@media (max-width:700px){.cloud-grid{grid-template-columns:1fr}}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#0a1120">
+<meta name="description" content="Sân chơi ôn tập điều khiển bằng cử chỉ tay qua webcam: 23 trò chơi, soạn đề, bảng điểm lớp.">
+<title>Lớp Học Thầy Lợi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
+</head>
+<body>
+<canvas id="bgCanvas"></canvas>
+<div id="app">
+  <aside class="rail">
+    <div class="logo"><span class="logo-mark" title="Lợi · Informatics | Mường Nhé"><img class="brand-logo" src="/src/assets/logo-loi.png" alt="Logo Lợi · Informatics | Mường Nhé" width="64" height="64"></span><div><b>Lớp Học Thầy Lợi</b><small>Ôn tập bằng cử chỉ tay</small></div></div>
+    <nav class="nav" id="nav">
+      <div class="nav-lbl">Lớp học</div>
+      <button data-hit data-nav="home" title="Trò chơi"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>Trò chơi</span></button>
+      <button data-hit data-nav="class" title="Học sinh & điểm"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.2c2.8.2 5 2.6 5 5.8"/></svg><span>Học sinh &amp; điểm</span></button>
+      <button data-hit data-nav="stats" title="Thống kê câu hỏi"><svg viewBox="0 0 24 24"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg><span>Thống kê</span></button>
+      <button data-hit data-nav="sets" title="Bộ đề"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></svg><span>Bộ đề</span></button>
+      <div class="nav-lbl">Thiết lập</div>
+      <button data-hit data-nav="practice" title="Hiệu chỉnh tay"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg><span>Hiệu chỉnh tay</span></button>
+      <button data-hit data-nav="settings" title="Cài đặt"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Cài đặt</span></button>
+    </nav>
+    <button class="rail-toggle" id="railToggle" data-hit title="Thu gọn / mở rộng menu" aria-label="Thu gọn hoặc mở rộng menu"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/><path d="M20 4v16"/></svg><span>Thu gọn menu</span></button>
+    <div class="rail-cam">
+      <div class="pvwrap"><video class="pv" muted playsinline></video><span class="pv-empty" data-pv-empty>Camera đang tắt</span></div>
+      <div class="cam-stats" id="camStats"></div>
+      <button class="btn sm block" data-hit data-cam-toggle>Bật camera</button>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="tb-btn" id="exitBtn" data-hit data-hold hidden title="Bấm chuột, hoặc giữ tay trên nút để thoát"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg><span class="lbltxt">Thoát <span class="hold-hint">(giữ)</span></span></button>
+      <div class="tb-title"><h1 id="pageTitle"></h1><p id="pageSub"></p></div>
+      <div class="hud" id="hud" hidden>
+        <span class="hchip" id="hudWho" hidden></span>
+        <span class="hchip" id="hudProg"></span>
+        <span class="hchip" id="hudExtra"></span>
+        <span class="hchip score" id="hudScorePill">Điểm <b id="hudScore">0</b></span>
+      </div>
+      <div class="tb-tools">
+        <button class="tb-btn" id="camBtn" data-hit title="Bật/tắt camera (phím C)"><span class="sd"></span><span class="lbltxt" id="camTxt">Bật camera</span></button>
+        <button class="tb-btn icon" id="ttsBtn" data-hit title="Đọc câu hỏi thành tiếng" aria-label="Bật hoặc tắt đọc câu hỏi thành tiếng"></button>
+        <button class="tb-btn icon" id="themeBtn" data-hit title="Đổi giao diện Sáng / Tối" aria-label="Đổi giao diện Sáng / Tối"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+        <button class="tb-btn icon" id="fsBtn" data-hit title="Toàn màn hình (phím F)" aria-label="Toàn màn hình"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      </div>
+    </header>
+    <main id="stage"></main>
+  </div>
+</div>
+<div id="camBox" class="off">
+  <div class="vid"><video id="video" playsinline muted></video><canvas id="camCanvas" width="320" height="240"></canvas></div>
+  <div class="lbl"><span id="camInfo">Chưa thấy tay</span><span>Camera</span></div>
+</div>
+<div id="loader" hidden><div class="loadcard"><div class="spin"></div><h3>Đang chuẩn bị camera</h3><p id="loaderStep"></p></div></div>
+<canvas id="fx"></canvas>
+<canvas id="handLayer"></canvas>
+<div id="toast" hidden></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

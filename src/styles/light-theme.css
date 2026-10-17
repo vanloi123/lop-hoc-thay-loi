@@ -1,0 +1,28 @@
+/* ================= v4.9.1 — độ rõ ở giao diện Sáng ================= */
+/* chữ tô màu theo trò/nhóm: làm đậm màu để đọc rõ trên nền sáng */
+body.light :is(.bname,.team-head,.tfz,.subj,.badge.lvl,.tw-zone,.dropbox,.ed-status,.meta.c,.gest,.feat-lbl,.tw-card small,.ws-word.found b,.wheel-res,.tw-h,.combo b){color:color-mix(in srgb,var(--c,var(--amber)) 60%,#000)}
+body.light .wheel-res,body.light .tw-h,body.light .combo b{--c:var(--amber)}
+body.light .subj.none{color:var(--muted)}
+body.light :is(.ans,.gate,.hoop,.bopt,.team .ans).ans-2 :is(.ans-key,b),body.light .ans-2 .ans-key{color:#fff}
+body.light .bucket{background:color-mix(in srgb,var(--c) 7%,#fff)}
+body.light .gest{background:color-mix(in srgb,var(--c) 12%,#fff)}
+body.light .feat-lbl{background:color-mix(in srgb,var(--c) 12%,#fff)}
+/* ảnh bìa: bớt lớp tối đục ở nền sáng, biểu tượng trắng có viền bóng rõ hơn */
+body.light .gart{--c2:color-mix(in srgb,var(--c) 72%,#000)}
+body.light .gart::after{background:linear-gradient(0deg,rgba(6,10,20,.2),transparent 50%)}
+body.light .gart-glyph{filter:drop-shadow(0 2px 0 rgba(6,10,20,.35)) drop-shadow(0 10px 16px rgba(6,10,20,.3))}
+/* chữ trên quả (Chém đáp án): viền tối để đọc được trên mọi màu quả */
+.fruit{text-shadow:0 0 3px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.6),0 2px 4px rgba(0,0,0,.6)}
+body.light .seq-arrow{color:var(--muted)}
+body.light .eyebrow,body.light .qmeta{color:var(--teal)}
+.tx-l{color:var(--sky)}.tx-r{color:var(--rose)}
+body.light .tx-l{color:#0369a1}body.light .tx-r{color:#be123c}
+/* chế độ thấy camera: chữ nằm thẳng trên hình camera cần một lớp kính nền */
+body.ar :is(.lobby-head,.lgroup-head){background:var(--surface);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--border);border-radius:18px;padding:14px 18px}
+body.ar .lgroup-head{padding:10px 16px}
+body.ar .lgroup-desc{align-self:flex-start;background:var(--surface);backdrop-filter:blur(14px);border-radius:12px;padding:6px 12px;margin:0}
+body.ar :is(.game .tip,.buzz-state,.combo,.court-tip,.bomb-side>p,.wheel-side,.pips){background:var(--surface);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:14px;padding:8px 14px;border:1px solid var(--border)}
+body.ar .game .tip{align-self:flex-start;margin:0}
+body.ar .wheel-side{padding:18px 20px}
+body.ar .buzz-state{align-self:center;margin:0 auto 6px;width:fit-content}
+body.ar .tw-tower{background:var(--surface);backdrop-filter:blur(14px)}
