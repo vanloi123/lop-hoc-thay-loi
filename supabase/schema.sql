@@ -22,6 +22,11 @@ create table if not exists public.user_kv (
   primary key (user_id, key)
 );
 
+-- Chỉ cho phép các khóa web đang dùng (bảng tạo từ phiên bản cũ có thể thiếu "qstats")
+alter table public.user_kv drop constraint if exists user_kv_key_check;
+alter table public.user_kv add constraint user_kv_key_check
+  check (key in ('prefs', 'class', 'best', 'recent', 'qstats'));
+
 -- ============ BẢO MẬT (RLS) ============
 -- Khóa anon nằm công khai trong trang web là bình thường; an toàn hoàn toàn dựa vào các quy tắc này.
 alter table public.question_sets enable row level security;
