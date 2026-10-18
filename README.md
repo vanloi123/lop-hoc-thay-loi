@@ -65,6 +65,19 @@ Lưu ý: thư mục `dist/` **không** mở trực tiếp bằng cách bấm đ�
 
 Từ đó, mỗi lần `git push` lên nhánh `main`, trang tự cập nhật.
 
+## Dùng khi không có mạng
+
+Bản web (GitHub Pages / tên miền riêng) có service worker lưu sẵn vào máy:
+
+- **Giao diện và 23 trò chơi**: tự lưu sau lần mở trang đầu tiên.
+- **Bộ nhận diện bàn tay** (khoảng 17 MB) và **phông chữ**: tự tải ngầm sau vài giây (trừ khi máy bật chế độ tiết kiệm dữ liệu), hoặc bấm **Cài đặt → Dùng khi không có mạng → Tải sẵn để dùng offline**.
+- Khi mất mạng, thanh trên cùng hiện **Ngoại tuyến**; bộ đề, điểm và lớp học vẫn lưu trên máy và tự đồng bộ khi có mạng lại.
+- Khi có bản mới trên GitHub, trang hiện thông báo **Đã có phiên bản mới → Cập nhật ngay** (không tự tải lại giữa lúc đang chơi).
+- Có thể **cài như ứng dụng** (Chrome / Edge): Cài đặt → **Cài ứng dụng lên máy**, hoặc biểu tượng cài đặt trên thanh địa chỉ.
+
+Tệp liên quan: `src/pwa/sw.js` (mẫu service worker; khi build, `vite.config.js` điền danh sách tệp và mã phiên bản rồi ghi ra `dist/sw.js`), `public/manifest.webmanifest`, `public/icons/`.
+Bản một tệp (`build:single`) không có chức năng này vì trình duyệt không cho service worker chạy với tệp mở từ ổ đĩa.
+
 ## Cấu hình Supabase (tùy chọn)
 
 Không cấu hình thì trang vẫn chạy đủ chức năng, dữ liệu chỉ lưu trên từng máy.

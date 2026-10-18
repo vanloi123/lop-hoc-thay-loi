@@ -209,3 +209,25 @@ table.rt{width:100%;border-collapse:collapse}
 .c-act .ibtn{display:inline-grid;vertical-align:middle}
 .reel-name{font-size:min(clamp(22px,calc(var(--row) * .34),56px),7vw)}
 @media (max-width:640px){.reel-row{gap:10px;padding:0 12px}.reel-row .av.md{width:40px;height:40px;font-size:15px}}
+
+/* ================= v6.5 — dùng khi không có mạng ================= */
+.off-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.off-list li{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--surface2);border:1px solid var(--border)}
+.off-list li b{display:block;font-size:14.5px}
+.off-list li small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.off-ic{width:28px;height:28px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--surface3);color:var(--muted)}
+.off-ic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.off-list li.ok{border-color:color-mix(in srgb,var(--good) 40%,var(--border))}
+.off-list li.ok .off-ic{background:var(--good);color:#fff}
+.off-prog{display:flex;flex-direction:column;gap:6px}
+.chipinfo.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--text);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.net-chip{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:13px;border-color:color-mix(in srgb,var(--warn) 50%,var(--border2))!important;color:var(--text)}
+.net-chip i{width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 4px color-mix(in srgb,var(--warn) 25%,transparent)}
+.net-chip[hidden]{display:none}
+.upd-bar{position:fixed;right:20px;bottom:20px;z-index:90;display:flex;align-items:center;gap:14px;max-width:min(520px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:18px;background:var(--surface);border:1px solid rgba(0,102,255,.4);box-shadow:var(--elev-2);animation:winIn .45s cubic-bezier(.2,1.3,.4,1)}
+.upd-bar>div{flex:1;min-width:0}
+.upd-bar b{display:block;font-size:15px}
+.upd-bar small{display:block;color:var(--muted);font-size:12.5px}
+.upd-ic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--grad-primary);color:#fff}
+.upd-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:640px){.upd-bar{left:16px;right:16px;bottom:16px;flex-wrap:wrap}}

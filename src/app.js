@@ -3943,6 +3943,153 @@ function CalibratePage() {
 }
 
 /* ---------------- CÀI ĐẶT ---------------- */
+/* ==========================================================
+   DÙNG KHI KHÔNG CÓ MẠNG (v6.5)
+   Service worker lưu sẵn giao diện, font và bộ nhận diện tay vào máy.
+   Chỉ bật cho bản web (http/https), không bật cho bản một tệp mở từ ổ đĩa.
+   ========================================================== */
+const PWA_ON = import.meta.env.PROD && import.meta.env.MODE !== "single" && typeof navigator !== "undefined" && "serviceWorker" in navigator && /^https?:$/.test(location.protocol);
+const RUNTIME_CACHE = "lhtl-runtime-v1";
+const MP_FILES = [
+  { url: VISION_URL, w: .2 },
+  { url: WASM_URL + "/vision_wasm_internal.js", w: .2 },
+  { url: WASM_URL + "/vision_wasm_internal.wasm", w: 9.4 },
+  { url: HAND_MODEL, w: 7.8 }
+];
+const OFF = { reg: null, waiting: null, prompt: null, busy: false, pct: 0, status: null, updating: false, bannerShown: false };
+const fontCssUrl = () => document.querySelector('link[rel="stylesheet"][href*="fonts.googleapis"]')?.href || "";
+const isStandalone = () => { try { return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; } catch (e) { return false; } };
+const fmtMB = b => (b / 1048576).toLocaleString("vi-VN", { maximumFractionDigits: b > 104857600 ? 0 : 1 }) + " MB";
+
+async function offlineStatus() {
+  if (!PWA_ON || !("caches" in window)) return null;
+  const has = async u => { try { return !!(u && await caches.match(u)); } catch (e) { return false; } };
+  const shell = await has(new URL("./index.html", location.href).href);
+  const hand = (await Promise.all(MP_FILES.map(f => has(f.url)))).every(Boolean);
+  const font = await has(fontCssUrl());
+  let used = 0, persisted = false;
+  try { used = (await navigator.storage.estimate()).usage || 0; } catch (e) {}
+  try { persisted = await navigator.storage.persisted(); } catch (e) {}
+  return (OFF.status = { shell, hand, font, used, persisted });
+}
+
+async function prepareOffline({ quiet = false } = {}) {
+  if (!PWA_ON || OFF.busy) return false;
+  if (!navigator.onLine) { if (!quiet) toast("Đang mất mạng. Hãy kết nối Internet rồi tải lại."); return false; }
+  OFF.busy = true; OFF.pct = 0; paintOffline();
+  try {
+    try { await navigator.storage?.persist?.(); } catch (e) {} // xin trình duyệt không tự xóa bộ nhớ này
+    await navigator.serviceWorker.ready;
+    const cache = await caches.open(RUNTIME_CACHE);
+    const jobs = [...MP_FILES];
+    const css = fontCssUrl();
+    if (css) {
+      const r = await fetch(css, { mode: "cors" });
+      if (r.ok) {
+        const text = await r.clone().text(); await cache.put(css, r);
+        [...new Set([...text.matchAll(/url\((https:\/\/fonts\.gstatic\.com[^)]+)\)/g)].map(m => m[1]))].forEach(url => jobs.push({ url, w: .03 }));
+      }
+    }
+    const total = jobs.reduce((a, j) => a + j.w, 0); let done = 0;
+    for (const j of jobs) {
+      if (!(await caches.match(j.url))) {
+        const r = await fetch(j.url, { mode: "cors" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        await cache.put(j.url, r);
+      }
+      done += j.w; OFF.pct = done / total; paintOffline(true);
+    }
+    store.set("lhvt6.offline", Date.now());
+    if (!quiet) { toast("Đã sẵn sàng dùng khi không có mạng", 2600); Sfx.right(); }
+    return true;
+  } catch (e) {
+    console.warn("prepareOffline", e);
+    if (!quiet) toast("Chưa tải xong (" + (e.message || "lỗi mạng") + "). Kiểm tra kết nối rồi thử lại.", 4000);
+    return false;
+  } finally { OFF.busy = false; await offlineStatus(); paintOffline(); }
+}
+
+function offlinePanel() {
+  const box = h("section", { class: "panel stack off-panel", id: "offline-panel" });
+  setTimeout(async () => { await offlineStatus(); paintOffline(); }, 0);
+  return box;
+}
+function paintOffline(progressOnly) {
+  const box = $("#offline-panel"); if (!box) return;
+  if (progressOnly && OFF.busy) { const i = box.querySelector(".off-prog i"), b = box.querySelector(".off-prog b"); if (i) i.style.width = Math.round(OFF.pct * 100) + "%"; if (b) b.textContent = Math.round(OFF.pct * 100) + "%"; return; }
+  box.innerHTML = "";
+  const head = h("div", { class: "sp-head" }, h("div", {}, h("h3", {}, "Dùng khi không có mạng"), h("small", { class: "muted" }, "Lưu sẵn ứng dụng vào máy để mất Wi-Fi giữa tiết vẫn dạy được")),
+    h("span", { class: "chipinfo " + (navigator.onLine ? "ok" : "warn") }, navigator.onLine ? "Đang có mạng" : "Đang mất mạng"));
+  box.append(head);
+  if (!PWA_ON) {
+    box.append(h("p", { class: "muted", style: "margin:0" }, import.meta.env.DEV ? "Chức năng này chỉ bật ở bản build (npm run build), không bật khi đang chạy npm run dev." : "Chức năng này dùng được khi mở trang qua địa chỉ web, ví dụ https://vanloi123.info.vn. Bản một tệp mở trực tiếp từ máy vẫn cần Internet cho lần đầu bật camera."));
+    return;
+  }
+  const s = OFF.status || {};
+  const item = (ok, title, sub) => h("li", { class: ok ? "ok" : "" }, h("span", { class: "off-ic", html: ok ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>' }), h("div", {}, h("b", {}, title), h("small", {}, sub)));
+  const ready = s.shell && s.hand && s.font;
+  box.append(h("ul", { class: "off-list" },
+    item(s.shell, "Giao diện và 23 trò chơi", s.shell ? "Đã lưu trên máy" : "Sẽ tự lưu sau lần tải trang đầu tiên"),
+    item(s.hand, "Bộ nhận diện bàn tay", s.hand ? "Đã lưu, bật camera không cần mạng" : "Khoảng 17 MB, cần tải một lần"),
+    item(s.font, "Phông chữ", s.font ? "Đã lưu" : "Khoảng 0,5 MB")));
+  if (OFF.busy) box.append(h("div", { class: "off-prog" }, h("div", { class: "bar" }, h("i", { style: `width:${Math.round(OFF.pct * 100)}%` })), h("small", { class: "muted" }, "Đang tải… ", h("b", {}, Math.round(OFF.pct * 100) + "%"))));
+  const row = h("div", { class: "row" });
+  row.append(on(h("button", { class: "btn sm " + (ready ? "" : "primary"), "data-hit": true, disabled: OFF.busy }, icon("down"), ready ? "Kiểm tra và tải lại" : "Tải sẵn để dùng offline"), () => prepareOffline()));
+  if (OFF.prompt) row.append(on(h("button", { class: "btn sm primary", "data-hit": true }, clIcon("plus"), "Cài ứng dụng lên máy"), installApp));
+  else if (isStandalone()) row.append(h("span", { class: "chipinfo ok" }, "Đang chạy như ứng dụng đã cài"));
+  box.append(row);
+  box.append(h("small", { class: "muted" }, [
+    ready ? "Sẵn sàng: có thể ngắt mạng và mở lại trang bình thường." : "Nên tải sẵn khi đang có Wi-Fi ổn định.",
+    s.used ? ` Đang dùng ${fmtMB(s.used)} bộ nhớ trình duyệt.` : "",
+    " Đăng nhập, đồng bộ đám mây và giọng đọc trực tuyến vẫn cần mạng; bộ đề, điểm và lớp học được lưu trên máy và tự đồng bộ khi có mạng lại."
+  ].join("")));
+}
+async function installApp() {
+  const p = OFF.prompt; if (!p) return;
+  OFF.prompt = null; p.prompt();
+  try { const r = await p.userChoice; if (r.outcome === "accepted") toast("Đang cài ứng dụng…"); } catch (e) {}
+  paintOffline();
+}
+function showUpdateBanner() {
+  if (OFF.bannerShown || !OFF.waiting) return;
+  if (screenName === "game" || screenName === "count") { setTimeout(showUpdateBanner, 8000); return; } // không làm phiền khi đang chơi
+  OFF.bannerShown = true;
+  const bar = h("div", { class: "upd-bar", role: "status" },
+    h("span", { class: "upd-ic", html: '<svg viewBox="0 0 24 24"><path d="M12 4v10M7.5 9.5L12 14l4.5-4.5M5 19h14"/></svg>' }),
+    h("div", {}, h("b", {}, "Đã có phiên bản mới"), h("small", {}, "Cập nhật mất vài giây, dữ liệu được giữ nguyên.")),
+    on(h("button", { class: "btn sm primary", "data-hit": true }, "Cập nhật ngay"), () => { OFF.updating = true; bar.querySelector(".btn").disabled = true; OFF.waiting.postMessage("SKIP_WAITING"); }),
+    on(h("button", { class: "ibtn", "data-hit": true, "aria-label": "Để sau", title: "Để sau" }, clIcon("close")), () => bar.remove()));
+  document.body.append(bar);
+}
+function paintNet() {
+  let chip = $("#netChip");
+  if (!chip) { const tools = $(".tb-tools"); if (!tools) return; chip = h("span", { class: "hchip net-chip", id: "netChip", title: "Không có kết nối Internet. Ứng dụng vẫn dùng được; dữ liệu sẽ đồng bộ khi có mạng lại." }, h("i"), "Ngoại tuyến"); tools.prepend(chip); }
+  chip.hidden = navigator.onLine;
+}
+function initPWA() {
+  paintNet();
+  addEventListener("online", () => { paintNet(); paintOffline(); toast("Đã có mạng trở lại", 1800); });
+  addEventListener("offline", () => { paintNet(); paintOffline(); toast(OFF.status?.shell ? "Mất mạng. Ứng dụng vẫn chạy bình thường." : "Mất mạng. Một số phần có thể chưa dùng được.", 3000); });
+  if (!PWA_ON) return;
+  addEventListener("beforeinstallprompt", e => { e.preventDefault(); OFF.prompt = e; paintOffline(); });
+  addEventListener("appinstalled", () => { OFF.prompt = null; toast("Đã cài “Lớp Học Thầy Lợi” lên máy", 2600); paintOffline(); });
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (OFF.updating) location.reload(); });
+  const start = async () => {
+    try {
+      const reg = OFF.reg = await navigator.serviceWorker.register("./sw.js");
+      const watch = w => w && w.addEventListener("statechange", () => { if (w.state === "installed" && navigator.serviceWorker.controller) { OFF.waiting = w; showUpdateBanner(); } });
+      if (reg.waiting && navigator.serviceWorker.controller) { OFF.waiting = reg.waiting; showUpdateBanner(); }
+      reg.addEventListener("updatefound", () => watch(reg.installing));
+      setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000); // tự kiểm tra bản mới mỗi 30 phút
+      await navigator.serviceWorker.ready;
+      const st = await offlineStatus(); paintOffline();
+      // bộ nhận diện tay rồi cũng phải tải khi bật camera; tải sẵn ngầm cho lần sau, trừ khi máy đang bật chế độ tiết kiệm dữ liệu
+      if (st && !(st.hand && st.font) && navigator.onLine && !navigator.connection?.saveData) setTimeout(() => prepareOffline({ quiet: true }), 6000);
+    } catch (e) { console.warn("service worker", e); }
+  };
+  if (document.readyState === "complete") start(); else addEventListener("load", start, { once: true });
+}
+
 function SettingsPage() {
   navPage = "settings";
   setScreen("settings", st => {
@@ -3969,7 +4116,7 @@ function SettingsPage() {
     const perGame = h("section", { class: "panel stack" }, h("div", { class: "sec-head" }, h("div", {}, h("h3", {}, "Thiết lập từng trò chơi"),
       h("p", { class: "muted", style: "margin:4px 0 0;font-size:14px" }, "Thời gian, số câu, số mạng, tốc độ… riêng cho mỗi trò. Có thể chỉnh nhanh ngay ở màn giới thiệu trước khi chơi.")),
       on(h("button", { class: "btn sm ghost", "data-hit": true }, "Đưa tất cả trò về mặc định"), () => { S.games = {}; saveS(); paintG(); toast("Đã đưa thiết lập của 13 trò về mặc định"); })), gchips, gpanel);
-    st.append(h("div", { class: "wrap" }, Cloud.panel(), h("div", { class: "grid2" },
+    st.append(h("div", { class: "wrap" }, Cloud.panel(), offlinePanel(), h("div", { class: "grid2" },
       h("section", { class: "panel stack" }, h("h3", {}, "Cử chỉ tay"),
         h("div", { class: "field" }, h("span", {}, "Cách chọn nút"), seg("mode", [["both", "Chụm tay hoặc giữ yên"], ["pinch", "Chỉ chụm tay"], ["dwell", "Chỉ giữ yên"]], S.mode, v => S.mode = v),
           h("small", {}, "Giữ yên hợp với học sinh nhỏ tuổi. Chụm tay nhanh hơn và ít chọn nhầm.")),
@@ -4317,7 +4464,7 @@ const Cloud = (() => {
             on(h("button", { class: "btn", "data-hit": true }, "Tạo tài khoản mới"), wrap(async () => { const [e, p] = need(); if ((p || "").length < 6) throw new Error("Mật khẩu cần ít nhất 6 ký tự."); const r = await signUp(e, p); if (r === "in") { toast("Đã tạo tài khoản và đăng nhập", 2500); paint(); } else say("Đã gửi email xác nhận tới " + e + ". Mở email, bấm vào đường link, rồi quay lại đây đăng nhập."); })),
             on(h("button", { class: "btn ghost sm", "data-hit": true }, "Quên mật khẩu"), wrap(async () => { const [e] = need(); await recover(e); say("Đã gửi email đặt lại mật khẩu tới " + e + "."); }))),
           msg,
-          fileCfg ? null : h("p", { class: "muted", style: "font-size:13px;margin:0" }, "Đang kết nối tới ", h("b", {}, cfg.url.replace(/^https:\/\//, "")), ". ",
+          fileCfg ? "" : h("p", { class: "muted", style: "font-size:13px;margin:0" }, "Đang kết nối tới ", h("b", {}, cfg.url.replace(/^https:\/\//, "")), ". ",
             on(h("button", { class: "linkbtn", "data-hit": true }, "Đổi máy chủ"), () => { cfg = null; store.set(CFG_KEY, null); paint(); emit(); })));
         return;
       }
@@ -4364,7 +4511,7 @@ const Cloud = (() => {
 on($("#ttsBtn"), toggleTTS); paintTTSBtn();
 new MutationObserver(() => { if (screenName !== "game") return; clearTimeout(ttsObsT); ttsObsT = setTimeout(ttsAuto, 200); }).observe(stage, { childList: true, subtree: true, characterData: true });
 addEventListener("keydown", e => { if ((e.key === "r" || e.key === "R") && screenName === "game" && !e.target.matches?.("input,textarea,select") && !e.ctrlKey && !e.metaKey) { const t = readableQ(); if (t) TTS.say(t, true); } });
-applyTheme(); applyRail();
+applyTheme(); applyRail(); initPWA();
 requestAnimationFrame(loop);
 go("home");
 Cloud.init();
