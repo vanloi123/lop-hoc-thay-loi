@@ -1,41 +1,4 @@
-# Lớp Học Thầy Lợi
 
-Sân chơi ôn tập điều khiển bằng **cử chỉ tay qua webcam**: 23 trò chơi, soạn bộ đề (nhập/xuất Excel), bảng điểm lớp, thống kê câu hay sai, đọc câu hỏi thành tiếng, đồng bộ dữ liệu qua Supabase.
-
-> Informatics | Mường Nhé
-
----
-
-## Cấu trúc thư mục
-
-```
-lop-hoc-thay-loi/
-├─ index.html                 Khung trang (menu, thanh trên, vùng hiển thị)
-├─ public/favicon.svg         Biểu tượng tab trình duyệt
-├─ src/
-│  ├─ main.js                 Điểm khởi động: nạp CSS → cấu hình → ứng dụng
-│  ├─ config.js               Đọc cấu hình Supabase từ tệp .env
-│  ├─ app.js                  Toàn bộ logic: nhận diện tay, 23 trò chơi, các trang
-│  ├─ data/sample-sets.js     4 bộ đề mẫu
-│  ├─ lib/xlsx.js             Đọc / ghi Excel (.xlsx) và CSV, không cần thư viện ngoài
-│  ├─ assets/logo-loi.png     Logo
-│  └─ styles/                 CSS chia theo phần (nạp theo thứ tự trong index.css)
-├─ supabase/schema.sql        Tạo bảng + quy tắc bảo mật trên Supabase
-├─ .github/workflows/deploy.yml   Tự động đưa lên GitHub Pages
-├─ .env.example               Mẫu cấu hình (sao chép thành .env)
-└─ vite.config.js
-```
-
-## Chạy trên máy
-
-Cần cài [Node.js](https://nodejs.org) bản 20 trở lên.
-
-```bash
-npm install          # chỉ cần chạy lần đầu
-npm run dev          # mở http://localhost:5173 — sửa mã là trang tự cập nhật
-```
-
-Camera chỉ bật được khi trang chạy qua `localhost` hoặc `https`.
 
 ## Tạo bản phát hành
 
