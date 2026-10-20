@@ -3182,12 +3182,14 @@ function renameStudent(c, a, b) {
   for (const k of ["meta", "scores", "absent"]) if (c[k] && a in c[k]) { c[k][b] = c[k][a]; delete c[k][a]; }
   c.called.forEach(x => { if (x.n === a) x.n = b; });
   if (c.pool) c.pool = c.pool.map(n => n === a ? b : n);
+  c.teams?.groups?.forEach(g => { const i = g.indexOf(a); if (i >= 0) g[i] = b; });
   Object.values(QSTATS).forEach(set => Object.values(set).forEach(e => { if (e.pl && a in e.pl) { e.pl[b] = e.pl[a]; delete e.pl[a]; } }));
   if (Play.player === a) Play.player = b;
 }
 function removeStudent(c, n) {
   c.roster = c.roster.filter(x => x !== n); delete c.meta[n]; delete c.scores[n]; delete c.absent[n];
   if (c.pool) c.pool = c.pool.filter(x => x !== n); if (Play.player === n) Play.player = null;
+  if (c.teams?.groups) c.teams.groups = c.teams.groups.map(g => g.filter(x => x !== n));
 }
 function award(n, pts) {
   const r = CLS.scores[n] || (CLS.scores[n] = { score: 0, plays: 0, best: {} });
@@ -3247,6 +3249,34 @@ function exportRoster(c) {
 
 /* ---------- chọn tên: không lặp lại cho tới khi gọi hết ---------- */
 S.pick = Object.assign({ present: true, noRepeat: true, group: "", count: 1, speak: true, mode: "reel" }, S.pick || {});
+/* ---------- chia nhóm ngẫu nhiên ---------- */
+S.teams = Object.assign({ mode: "count", k: 4, size: 4, names: "num", present: true, balance: true, avoid: true }, S.teams || {});
+const TEAM_COLORS = ["#0066FF", "#DB2777", "#059669", "#D97706", "#7C3AED", "#0891B2", "#E11D48", "#65A30D", "#9333EA", "#0D9488"];
+const TEAM_ANIMALS = ["Hổ", "Voi", "Đại Bàng", "Cá Heo", "Sóc", "Gấu", "Báo", "Công", "Ngựa", "Rùa"];
+const teamLabels = (k, style) => Array.from({ length: k }, (_, i) => style === "animal" ? `Đội ${TEAM_ANIMALS[i % TEAM_ANIMALS.length]}` : `Nhóm ${i + 1}`);
+const teamCount = (n, T) => n < 2 ? 0 : clamp(T.mode === "size" ? Math.round(n / Math.max(2, T.size)) || 1 : T.k, 2, Math.min(10, n));
+function teamSizes(n, k) { if (!k) return "0"; const lo = Math.floor(n / k), hi = Math.ceil(n / k); return lo === hi ? String(lo) : `${lo}–${hi}`; }
+function makeTeams(c, pool, T) {
+  const k = teamCount(pool.length, T); if (k < 2) return null;
+  const gender = n => c.meta[n]?.gender || "";
+  const pk = (a, b) => a < b ? a + "\n" + b : b + "\n" + a;
+  const prev = new Set();
+  if (T.avoid) for (const g of c.teams?.groups || []) for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) prev.add(pk(g[i], g[j]));
+  let best = null, bestScore = Infinity;
+  for (let tries = 0; tries < (prev.size ? 400 : 1); tries++) {
+    const order = T.balance
+      ? [...shuffle(pool.filter(n => gender(n) === "Nam")), ...shuffle(pool.filter(n => gender(n) === "Nữ")), ...shuffle(pool.filter(n => !["Nam", "Nữ"].includes(gender(n))))]
+      : shuffle(pool);
+    const groups = Array.from({ length: k }, () => []), off = Math.random() * k | 0;
+    order.forEach((n, i) => groups[(i + off) % k].push(n)); // chia vòng tròn: các nhóm chênh nhau tối đa 1 bạn
+    let score = 0;
+    if (prev.size) for (const g of groups) for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) if (prev.has(pk(g[i], g[j]))) score++;
+    if (score < bestScore) { best = groups; bestScore = score; if (!score) break; }
+  }
+  return shuffle(best).map(g => g.sort(viNameCmp));
+}
+
+
 function eligible(c) {
   let b = S.pick.present ? presentList(c) : c.roster.slice();
   if (S.pick.group) b = b.filter(n => (c.meta[n]?.group || "") === S.pick.group);
@@ -3350,7 +3380,7 @@ function ClassPage() {
     const refreshKpis = () => { if (!kpiEl?.isConnected) return; const n = kpis(curClass()); kpiEl.replaceWith(n); kpiEl = n; };
     const fileIn = h("input", { type: "file", accept: ".xlsx,.xlsm,.csv,.tsv,.txt,.xls", hidden: true });
     fileIn.addEventListener("change", () => { const f = fileIn.files[0]; fileIn.value = ""; if (f) importFile(f); });
-    const onKey = e => { if (e.key === "Escape" && CLP.present) { CLP.present = false; draw(); } };
+    const onKey = e => { if (e.key === "Escape" && (CLP.present || CLP.teamsPresent)) { CLP.present = CLP.teamsPresent = false; draw(); } };
     addEventListener("keydown", onKey);
     if (!CLP.tab) CLP.tab = curClass().roster.length ? "pick" : "list";
 
@@ -3361,7 +3391,7 @@ function ClassPage() {
       root.innerHTML = ""; root.append(fileIn, h("datalist", { id: "dl-groups" }, groupsOf(c).map(g => h("option", { value: g }))));
       setTitle("Học sinh & điểm", `${c.name} · ${c.roster.length} học sinh`);
       kpiEl = kpis(c); root.append(header(c), kpiEl, tabs(c));
-      root.append(CLP.tab === "pick" ? pickerView(c) : CLP.tab === "rank" ? rankView(c) : listView(c));
+      root.append(CLP.tab === "pick" ? pickerView(c) : CLP.tab === "rank" ? rankView(c) : CLP.tab === "teams" ? teamsView(c) : listView(c));
       stage.scrollTop = y;
       if (CLP.tab === "pick") requestAnimationFrame(() => { reel?.idle(eligible(c)); wheel?.set(eligible(c)); });
     }
@@ -3408,7 +3438,7 @@ function ClassPage() {
     }
     function tabs(c) {
       const t = (id, ic, label, n) => on(h("button", { class: "cls-tab" + (CLP.tab === id ? " active" : ""), "data-hit": true, role: "tab", "aria-selected": CLP.tab === id ? "true" : "false" }, clIcon(ic), h("span", {}, label), n != null ? h("b", {}, n) : null), () => { if (CLP.tab !== id) { CLP.tab = id; draw(); } });
-      return h("div", { class: "cls-tabs", role: "tablist" }, t("pick", "dice", "Gọi tên"), t("list", "list", "Danh sách lớp", c.roster.length), t("rank", "trophy", "Xếp hạng"));
+      return h("div", { class: "cls-tabs", role: "tablist" }, t("pick", "dice", "Gọi tên"), t("teams", "users", "Chia nhóm"), t("list", "list", "Danh sách lớp", c.roster.length), t("rank", "trophy", "Xếp hạng"));
     }
 
     /* ================= GỌI TÊN ================= */
@@ -3424,6 +3454,7 @@ function ClassPage() {
         result.append(h("div", { class: "win-grid" + (ws.length > 1 ? " multi" : "") }, ws.map(n => winCard(c, n))));
       };
       const go = on(h("button", { class: "btn primary xl pick-go", "data-hit": true, disabled: !base.length }, clIcon("dice"), S.pick.count > 1 ? `Gọi ${S.pick.count} bạn` : "Gọi tên"), () => doPick());
+      CLP.remotePick = doPick;
       async function doPick() {
         if (CLP.busy) return;
         const { names, newRound } = drawNames(c, S.pick.count); if (!names.length) { toast("Không còn bạn nào phù hợp để gọi"); return; }
@@ -3441,6 +3472,7 @@ function ClassPage() {
         saveCls(); CLP.busy = false; go.disabled = false;
         result.classList.remove("hidden"); paintResult(); paintSide(); refreshKpis();
         if (S.pick.speak) TTS.say((names.length > 1 ? "Mời các em " + names.join(", ") : "Mời em " + names[0]) + ".", true);
+        remotePicked(names);
       }
       const modeSeg = h("div", { class: "seg-tabs" },
         [["reel", "reel", "Máy quay số"], ["wheel", "wheel", "Vòng quay"]].map(([v, ic, l]) => on(h("button", { class: "seg-btn" + (mode === v ? " active" : ""), "data-hit": true }, clIcon(ic), l), () => { if (CLP.busy || S.pick.mode === v) return; S.pick.mode = v; saveS(); draw(); })));
@@ -3490,6 +3522,83 @@ function ClassPage() {
           h("div", { class: "pts-row" }, pts(1), pts(2), pts(5)),
           on(h("button", { class: "btn sm ghost", "data-hit": true, title: "Đánh dấu vắng, lần sau không gọi nữa" }, "Vắng mặt"), () => { classAbsent(c)[n] = true; CLP.last = CLP.last.filter(x => x !== n); const li = c.called.map(x => x.n).lastIndexOf(n); if (li >= 0) c.called.splice(li, 1); saveCls(); toast(`Đã đánh dấu ${n} vắng mặt`); draw(); })));
       paintScore(); return card;
+    }
+
+    /* ================= CHIA NHÓM ================= */
+    function teamsView(c) {
+      if (c.roster.length < 2) return emptyRoster("Cần ít nhất 2 học sinh để chia nhóm");
+      const T = S.teams, pool = T.present ? presentList(c) : c.roster.slice();
+      const hasGender = pool.some(n => c.meta[n]?.gender);
+      const nGroups = teamCount(pool.length, T);
+      const wrap = h("div", { class: "teams-wrap" });
+      /* cột tùy chọn */
+      const seg = (name, opts, val, fn) => h("div", { class: "seg" }, opts.map(([v, l]) => { const i = h("input", { type: "radio", name, id: `${name}-${v}`, checked: val === v }); i.addEventListener("change", () => { fn(v); saveS(); draw(); }); return h("label", { for: `${name}-${v}` }, i, h("span", {}, l)); }));
+      const chk = (key, label, sub, disabled) => { const i = h("input", { type: "checkbox", id: "tm-" + key, checked: !!T[key] && !disabled, disabled }); i.addEventListener("change", () => { T[key] = i.checked; saveS(); draw(); }); return h("label", { class: "check", for: "tm-" + key, style: "align-items:flex-start" + (disabled ? ";opacity:.55" : "") }, i, h("span", {}, label, sub ? h("small", { class: "muted", style: "display:block;font-weight:400" }, sub) : null)); };
+      const stepper = (val, min, max, fn) => h("div", { class: "stepper" },
+        on(h("button", { class: "ibtn", "data-hit": true, "aria-label": "Bớt", disabled: val <= min }, "−"), () => { fn(Math.max(min, val - 1)); saveS(); draw(); }),
+        h("b", {}, val),
+        on(h("button", { class: "ibtn", "data-hit": true, "aria-label": "Thêm", disabled: val >= max }, "+"), () => { fn(Math.min(max, val + 1)); saveS(); draw(); }));
+      const side = h("aside", { class: "panel stack teams-opt", style: "gap:16px" },
+        h("h3", {}, "Cách chia"),
+        seg("tmm", [["count", "Theo số nhóm"], ["size", "Theo số bạn / nhóm"]], T.mode, v => T.mode = v),
+        T.mode === "count"
+          ? h("div", { class: "field" }, h("span", {}, "Số nhóm"), stepper(T.k, 2, Math.min(10, Math.max(2, pool.length)), v => T.k = v))
+          : h("div", { class: "field" }, h("span", {}, "Số bạn mỗi nhóm"), stepper(T.size, 2, Math.max(2, Math.min(12, pool.length)), v => T.size = v)),
+        h("p", { class: "muted", style: "margin:-6px 0 0;font-size:13.5px" }, pool.length >= 2 ? `${pool.length} bạn → ${nGroups} nhóm, mỗi nhóm ${teamSizes(pool.length, nGroups)} bạn` : "Chưa đủ học sinh có mặt"),
+        h("div", { class: "field" }, h("span", {}, "Tên nhóm"), seg("tmn", [["num", "Nhóm 1, 2…"], ["animal", "Đội Hổ, Voi…"]], T.names, v => { T.names = v; if (c.teams) { c.teams.labels = teamLabels(c.teams.groups.length, v); saveCls(); } })),
+        chk("present", "Chỉ chia bạn có mặt", "Bạn vắng được đánh dấu ở tab Danh sách lớp."),
+        chk("balance", "Cân bằng nam / nữ", hasGender ? "Mỗi nhóm có số bạn nam và nữ gần bằng nhau." : "Cần có cột Giới tính trong danh sách lớp.", !hasGender),
+        chk("avoid", "Tránh ghép lại như lần trước", "Hạn chế để các bạn đã cùng nhóm lần trước lại chung nhóm."));
+      /* bảng kết quả */
+      const board = h("section", { class: "teams-board" + (CLP.teamsPresent ? " present" : "") });
+      const tm = c.teams && c.teams.groups?.length ? c.teams : null;
+      const top = h("div", { class: "teams-top" },
+        h("div", {}, h("h3", { style: "margin:0" }, tm ? `${tm.groups.length} nhóm` : "Chưa chia nhóm"), h("small", { class: "muted" }, tm ? `Chia lúc ${new Date(tm.at).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })} · bấm vào 2 bạn ở 2 nhóm khác nhau để đổi chỗ` : "Chọn cách chia rồi bấm “Chia nhóm”")),
+        h("div", { class: "row" },
+          on(h("button", { class: "btn primary", "data-hit": true, disabled: pool.length < 2 }, clIcon("dice"), tm ? "Chia lại" : "Chia nhóm"), () => {
+            const groups = makeTeams(c, pool, T); if (!groups) return;
+            c.teams = { at: Date.now(), groups, labels: teamLabels(groups.length, T.names) }; CLP.teamReveal = true; CLP.swapSel = null;
+            saveCls(); Sfx.swish(); draw();
+          }),
+          tm ? on(h("button", { class: "btn", "data-hit": true }, clIcon(CLP.teamsPresent ? "close" : "screen"), CLP.teamsPresent ? "Thoát trình chiếu" : "Trình chiếu"), () => { CLP.teamsPresent = !CLP.teamsPresent; draw(); }) : null));
+      board.append(top);
+      if (!tm) { board.append(h("div", { class: "teams-empty" }, h("span", { class: "st-empty-ic", html: CL_IC.users }), h("p", { class: "muted" }, "Kết quả chia nhóm sẽ hiện ở đây, có thể trình chiếu cho cả lớp."))); wrap.append(board, side); return wrap; }
+      const reveal = CLP.teamReveal; CLP.teamReveal = false;
+      const grid = h("div", { class: "teams-grid", style: `--cols:${Math.min(tm.groups.length, tm.groups.length <= 4 ? tm.groups.length : Math.ceil(tm.groups.length / 2))}` });
+      let order = 0;
+      tm.groups.forEach((g, gi) => {
+        const color = TEAM_COLORS[gi % TEAM_COLORS.length];
+        const nm = g.filter(n => c.meta[n]?.gender === "Nam").length, nf = g.filter(n => c.meta[n]?.gender === "Nữ").length;
+        grid.append(h("div", { class: "team-card", style: `--tc:${color}` },
+          h("div", { class: "team-head" }, h("b", {}, tm.labels?.[gi] || `Nhóm ${gi + 1}`), h("small", {}, `${g.length} bạn${nm || nf ? ` · ${nm} nam, ${nf} nữ` : ""}`)),
+          h("ul", { class: "team-list" }, g.map(n => {
+            const sel = CLP.swapSel && CLP.swapSel.n === n;
+            const li = on(h("li", { class: "team-m" + (sel ? " sel" : "") + (reveal ? " rv" : ""), "data-hit": true, style: reveal ? `animation-delay:${Math.min(order++ * 70, 2600)}ms` : "", title: "Bấm để đổi chỗ với bạn ở nhóm khác" }, avatar(n, "sm"), h("span", {}, n)), () => {
+              if (!CLP.swapSel) { CLP.swapSel = { n, gi }; draw(); return; }
+              if (CLP.swapSel.n === n) { CLP.swapSel = null; draw(); return; }
+              if (CLP.swapSel.gi === gi) { CLP.swapSel = { n, gi }; draw(); return; }
+              const a = CLP.swapSel, ga = tm.groups[a.gi], gb = tm.groups[gi];
+              ga[ga.indexOf(a.n)] = n; gb[gb.indexOf(n)] = a.n; CLP.swapSel = null; saveCls(); Sfx.tick(); toast(`Đã đổi chỗ ${a.n} và ${n}`, 1500); draw();
+            });
+            return li;
+          }))));
+      });
+      board.append(grid);
+      if (reveal) { const total = Math.min(order * 70, 2600); for (let t = 0; t < total; t += 140) ts.push(setTimeout(() => Sfx.tick(), t)); ts.push(setTimeout(() => { Sfx.win(); FX.burstEl(grid, 30); }, total + 250)); }
+      let armed = false;
+      const apply = on(h("button", { class: "btn sm", "data-hit": true, title: "Ghi tên nhóm vào cột Tổ của từng bạn, để dùng cho Thi đua theo tổ ở tab Xếp hạng" }, "Dùng làm tổ thi đua"), () => {
+        if (!armed && c.roster.some(n => c.meta[n]?.group)) { armed = true; apply.textContent = "Bấm lần nữa: ghi đè cột Tổ hiện có"; ts.push(setTimeout(() => { armed = false; apply.textContent = "Dùng làm tổ thi đua"; }, 3000)); return; }
+        tm.groups.forEach((g, gi) => g.forEach(n => { (c.meta[n] || (c.meta[n] = {})).group = tm.labels?.[gi] || `Nhóm ${gi + 1}`; }));
+        saveCls(); toast("Đã dùng các nhóm này làm tổ. Xem thi đua ở tab Xếp hạng.", 3000); Sfx.right(); draw();
+      });
+      board.append(h("div", { class: "row teams-actions" }, apply,
+        on(h("button", { class: "btn sm ghost", "data-hit": true }, icon("xls"), "Xuất Excel"), () => {
+          const rows = [["Nhóm", "STT", "Họ và tên", "Giới tính"]];
+          tm.groups.forEach((g, gi) => g.forEach((n, i) => rows.push([tm.labels?.[gi] || `Nhóm ${gi + 1}`, String(i + 1), n, c.meta[n]?.gender || ""])));
+          downloadBlob(XL.write([{ name: "Chia nhóm", header: true, widths: [16, 7, 32, 12], rows }]), `${c.name} - chia nhom - ${todayStr()}.xlsx`); toast("Đã xuất danh sách nhóm");
+        })));
+      wrap.append(board, side);
+      return wrap;
     }
 
     /* ================= DANH SÁCH LỚP ================= */
@@ -3725,7 +3834,7 @@ function ClassPage() {
     }
 
     draw();
-    return () => { CLP.busy = false; CLP.present = false; reel?.stop(); wheel?.stop(); removeEventListener("keydown", onKey); ts.forEach(clearTimeout); };
+    return () => { CLP.busy = false; CLP.present = false; CLP.teamsPresent = false; CLP.swapSel = null; CLP.remotePick = null; reel?.stop(); wheel?.stop(); removeEventListener("keydown", onKey); ts.forEach(clearTimeout); };
   });
 }
 
@@ -4088,6 +4197,179 @@ function initPWA() {
     } catch (e) { console.warn("service worker", e); }
   };
   if (document.readyState === "complete") start(); else addEventListener("load", start, { once: true });
+}
+
+/* ==========================================================
+   ĐIỀU KHIỂN BẰNG ĐIỆN THOẠI (v6.6) — phía máy chiếu
+   Máy chiếu tạo một phiên (mã kênh + khóa bí mật), hiện mã QR.
+   Điện thoại quét mã → mở trang ở chế độ điều khiển → hai bên nhắn tin qua Supabase Realtime.
+   Mọi tin nhắn phải kèm khóa bí mật của phiên, nếu không sẽ bị bỏ qua.
+   ========================================================== */
+const RM_KEY = "lhvt6.remote";
+const RM = { ch: null, mod: null, state: "off", sess: null, phones: new Map(), sig: "", rid: 0, thr: 0, obs: null, pingT: 0, qr: null };
+const PHONE_IC = '<svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>';
+const remoteSession = () => { const s = store.get(RM_KEY, null); return s && s.name && s.tk && Date.now() - (s.at || 0) < 12 * 3600e3 ? s : null; };
+const remoteLink = () => RM.sess ? location.href.split("#")[0] + "#remote=" + RM.sess.name + "." + RM.sess.tk : "";
+const remoteSend = p => RM.ch?.send({ ...p, tk: RM.sess?.tk });
+
+async function remoteStart(fresh) {
+  if (RM.ch && !fresh) return true;
+  const cfg = window.LHVT_CLOUD;
+  if (!cfg) { toast("Cần cấu hình Supabase để dùng điều khiển bằng điện thoại", 3500); return false; }
+  if (RM.ch) { RM.ch.close(); RM.ch = null; }
+  try { RM.mod ||= await import("./remote/channel.js"); } catch (e) { toast("Không tải được thành phần kết nối. Kiểm tra mạng rồi thử lại."); return false; }
+  let s = fresh ? null : remoteSession();
+  if (!s) { s = { name: RM.mod.randomId(10), tk: RM.mod.randomId(18) }; RM.phones.clear(); }
+  s.at = Date.now(); store.set(RM_KEY, s); RM.sess = s; RM.sig = ""; RM.qr = null;
+  RM.ch = RM.mod.openChannel({ url: cfg.url, key: cfg.anonKey, name: s.name, onMsg: remoteOnMsg,
+    onStatus: st => { RM.state = st; paintRemoteBtn(); paintRemoteModal(); if (st === "online") { remoteSend({ t: "host" }); remoteBroadcast(true); } } });
+  if (!RM.obs) RM.obs = new MutationObserver(() => { if (RM.thr) return; RM.thr = setTimeout(() => { RM.thr = 0; remoteBroadcast(); }, 300); });
+  RM.obs.observe(document.getElementById("app"), { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class", "disabled", "hidden"] });
+  clearInterval(RM.pingT);
+  RM.pingT = setInterval(() => { // bỏ điện thoại im lặng quá 45 giây
+    let changed = false; for (const [id, p] of RM.phones) if (Date.now() - p.seen > 45000) { RM.phones.delete(id); changed = true; }
+    if (changed) { paintRemoteBtn(); paintRemoteModal(); }
+    if (RM.sess) { RM.sess.at = Date.now(); store.set(RM_KEY, RM.sess); }
+  }, 10000);
+  paintRemoteBtn(); paintRemoteModal(); return true;
+}
+function remoteStop() {
+  remoteSend({ t: "bye" });
+  setTimeout(() => { RM.ch?.close(); RM.ch = null; }, 300);
+  RM.obs?.disconnect(); clearInterval(RM.pingT); RM.phones.clear(); RM.state = "off"; RM.sess = null; store.set(RM_KEY, null);
+  paintRemoteBtn(); paintRemoteModal();
+}
+
+/* ảnh chụp những gì đang có trên màn hình: tiêu đề, câu hỏi, các nút bấm được */
+function remoteSnapshot() {
+  const vis = el => { if (el.closest("[hidden]")) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  const label = el => (el.querySelector(".gname, .srow-t b")?.textContent || el.getAttribute("aria-label") || el.innerText || el.title || "").replace(/\s+/g, " ").trim().slice(0, 70);
+  const btns = [], seenGame = new Set();
+  for (const el of document.querySelectorAll("#stage [data-hit]")) {
+    if (btns.length >= 80) break;
+    if (!vis(el) || el.closest(".hist") || el.matches(".tts-btn")) continue;
+    const l = label(el); if (!l) continue;
+    if (el.matches(".gcard,.srow")) { if (seenGame.has(l)) continue; seenGame.add(l); }
+    if (!el.dataset.rid) el.dataset.rid = String(++RM.rid);
+    const ans = el.matches(".ans,.tfz,.gate,.hoop,.bopt,.bcell,.tile,.ws-cell,.mitem,.mcard,.tok,.key,.chip,.mole,.bubble,.fruit");
+    const kind = ans ? "ans" : el.matches(".btn.primary,.pick-go") ? "pri" : el.matches(".gcard,.srow,.feat .btn") ? "game" : "btn";
+    let color = ""; if (ans) { try { color = getComputedStyle(el).getPropertyValue("--c").trim(); } catch (e) {} }
+    btns.push({ r: el.dataset.rid, l, k: kind, d: el.disabled || el.classList.contains("is-locked") || el.classList.contains("is-gone") ? 1 : 0, c: color });
+  }
+  const q = document.querySelector("#stage .qcard .qtext, #stage .qcard .hint, #stage .tw-card b")?.textContent.trim() || "";
+  const hudOn = !$("#hud").hidden;
+  return { t: "state", scr: screenName, title: $("#pageTitle").textContent, sub: $("#pageSub").textContent, q, ing: document.body.classList.contains("in-game") ? 1 : 0,
+    score: hudOn && !$("#hudScorePill").hidden ? $("#hudScore").textContent : "", prog: hudOn && !$("#hudProg").hidden ? $("#hudProg").textContent : "",
+    who: Play.player || "", cam: Cam.running ? 1 : 0, btns };
+}
+function remoteBroadcast(force) {
+  if (!RM.ch?.online || (!RM.phones.size && !force)) return;
+  const snap = remoteSnapshot(), sig = JSON.stringify(snap);
+  if (!force && sig === RM.sig) return;
+  RM.sig = sig; remoteSend(snap);
+}
+function remoteRoster() {
+  const c = curClass(), ab = classAbsent(c);
+  remoteSend({ t: "roster", cls: c.name, list: c.roster.map(n => ({ n, s: scoreOf(c, n), a: ab[n] ? 1 : 0, g: c.meta[n]?.group || "" })) });
+}
+function remotePicked(names) { if (RM.ch) { remoteSend({ t: "picked", names }); remoteRoster(); } }
+function remotePick() {
+  if (!curClass().roster.length) { remoteSend({ t: "toast", msg: "Lớp chưa có học sinh" }); return; }
+  CLP.tab = "pick";
+  if (screenName !== "class" || !CLP.remotePick) go("class");
+  setTimeout(() => CLP.remotePick ? CLP.remotePick() : remoteSend({ t: "toast", msg: "Chưa gọi được tên, thử lại" }), 400);
+}
+function remoteOnMsg(p) {
+  if (!p || !RM.sess || p.tk !== RM.sess.tk || p.from !== "phone") return;
+  if (p.id) {
+    const isNew = !RM.phones.has(p.id);
+    RM.phones.set(p.id, { seen: Date.now(), dev: String(p.dev || "Điện thoại").slice(0, 40) });
+    if (isNew && p.t !== "bye") { toast("Điện thoại đã kết nối", 1800); Sfx.right(); paintRemoteBtn(); if (RM.phones.size === 1) closeRemoteModal(); else paintRemoteModal(); }
+  }
+  switch (p.t) {
+    case "hello": case "sync": RM.sig = ""; remoteBroadcast(true); remoteRoster(); break;
+    case "bye": RM.phones.delete(p.id); paintRemoteBtn(); paintRemoteModal(); break;
+    case "click": {
+      const el = document.querySelector(`[data-rid="${String(p.r).replace(/\D/g, "")}"]`);
+      if (el && !el.disabled && el.isConnected) el.click(); else remoteSend({ t: "toast", msg: "Nút này không còn trên màn hình" });
+      break;
+    }
+    case "nav":
+      if (["home", "class", "stats", "sets", "settings"].includes(p.page)) { if (p.page === "class" && p.tab) CLP.tab = p.tab; go(p.page); }
+      break;
+    case "back": go("home"); break;
+    case "tts": { const t = readableQ(); if (t) TTS.say(t, true); else remoteSend({ t: "toast", msg: "Màn hình hiện không có câu hỏi" }); break; }
+    case "pick": remotePick(); break;
+    case "award": {
+      const pts = clamp(Math.round(+p.pts || 0), -10, 10);
+      if (pts && curClass().roster.includes(p.n)) { award(p.n, pts); toast(`${pts > 0 ? "+" : ""}${pts} điểm cho ${p.n}`, 1600); remoteRoster(); if (screenName === "class" && !CLP.busy) go("class"); }
+      break;
+    }
+  }
+}
+
+/* nút trên thanh trên cùng */
+function paintRemoteBtn() {
+  let b = $("#remoteBtn");
+  if (!b) {
+    const tools = $(".tb-tools"); if (!tools) return;
+    b = on(h("button", { class: "tb-btn icon rm-btn", id: "remoteBtn", "data-hit": true, title: "Điều khiển bằng điện thoại", "aria-label": "Điều khiển bằng điện thoại", html: PHONE_IC + '<span class="rm-badge"></span>' }), openRemoteModal);
+    tools.insertBefore(b, $("#camBtn"));
+  }
+  const n = RM.phones.size;
+  b.classList.toggle("on", !!RM.ch && RM.state === "online");
+  b.classList.toggle("has", n > 0);
+  b.querySelector(".rm-badge").textContent = n ? String(n) : "";
+  b.title = !RM.ch ? "Điều khiển bằng điện thoại" : n ? `Đang có ${n} điện thoại điều khiển` : "Đang chờ điện thoại kết nối";
+}
+
+/* hộp ghép nối với mã QR */
+async function qrSvg(text) {
+  const { default: qrcode } = await import("qrcode-generator");
+  const qr = qrcode(0, "M"); qr.addData(text); qr.make();
+  const n = qr.getModuleCount(), m = 2; let d = "";
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c + m} ${r + m}h1v1h-1z`;
+  return `<svg viewBox="0 0 ${n + m * 2} ${n + m * 2}" shape-rendering="crispEdges" role="img" aria-label="Mã QR để mở trang điều khiển"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#0a1120"/></svg>`;
+}
+function closeRemoteModal() { $("#rmModal")?.remove(); }
+async function openRemoteModal() {
+  closeRemoteModal();
+  const ov = h("div", { class: "rm-modal", id: "rmModal", role: "dialog", "aria-modal": "true", "aria-label": "Điều khiển bằng điện thoại" });
+  ov.addEventListener("click", e => { if (e.target === ov) closeRemoteModal(); });
+  document.body.append(ov);
+  if (window.LHVT_CLOUD && navigator.onLine && !RM.ch) await remoteStart();
+  paintRemoteModal();
+}
+async function paintRemoteModal() {
+  const ov = $("#rmModal"); if (!ov) return;
+  const card = h("div", { class: "rm-card" });
+  const close = on(h("button", { class: "ibtn rm-x", "data-hit": true, "aria-label": "Đóng" }, clIcon("close")), closeRemoteModal);
+  card.append(close, h("div", { class: "rm-title" }, h("span", { class: "rm-ic", html: PHONE_IC }), h("div", {}, h("h3", {}, "Điều khiển bằng điện thoại"), h("small", { class: "muted" }, "Đi lại trong lớp mà vẫn chuyển câu, gọi tên, cộng điểm"))));
+  if (!window.LHVT_CLOUD) { card.append(h("p", { class: "tts-warn" }, "Chức năng này cần kết nối Supabase (đã cấu hình ở bản web trên GitHub Pages). Bản một tệp mở từ máy không dùng được.")); ov.replaceChildren(card); return; }
+  if (!navigator.onLine && !RM.ch) { card.append(h("p", { class: "tts-warn" }, "Đang mất mạng. Cả máy chiếu và điện thoại cần có Internet để kết nối với nhau.")); ov.replaceChildren(card); return; }
+  const link = remoteLink();
+  if (link && RM.qr?.link !== link) RM.qr = { link, svg: await qrSvg(link) };
+  const st = RM.state === "online" ? ["ok", RM.phones.size ? `Đã kết nối ${RM.phones.size} điện thoại` : "Sẵn sàng, đang chờ điện thoại quét mã"] : RM.state === "error" ? ["bad", "Chưa kết nối được máy chủ. Đang thử lại…"] : ["", "Đang kết nối…"];
+  card.append(
+    h("div", { class: "rm-body" },
+      h("div", { class: "rm-qr", html: RM.qr?.svg || "" }),
+      h("div", { class: "rm-steps" },
+        h("ol", {}, h("li", {}, "Mở ", h("b", {}, "Camera"), " hoặc ", h("b", {}, "Zalo"), " trên điện thoại, quét mã bên cạnh."), h("li", {}, "Mở đường link hiện ra. Điện thoại và máy chiếu ", h("b", {}, "không cần chung Wi-Fi"), ", chỉ cần có Internet."), h("li", {}, "Điều khiển ngay trên điện thoại.")),
+        h("div", { class: "rm-status " + st[0] }, h("i"), st[1]),
+        RM.phones.size ? h("ul", { class: "rm-phones" }, [...RM.phones.values()].map(p => h("li", {}, h("span", { class: "rm-ic sm", html: PHONE_IC }), p.dev))) : null,
+        h("div", { class: "rm-link" }, h("input", { type: "text", readonly: true, value: link, "aria-label": "Đường link điều khiển", onfocus: "this.select()" }),
+          on(h("button", { class: "btn sm", "data-hit": true }, "Sao chép"), async () => { try { await navigator.clipboard.writeText(link); toast("Đã sao chép đường link"); } catch (e) { toast("Không sao chép được, hãy chọn và sao chép thủ công"); } })))),
+    h("div", { class: "row rm-foot" },
+      h("small", { class: "muted" }, "Ai có mã này đều điều khiển được màn hình. Bấm “Tạo mã mới” để thu hồi quyền của các điện thoại cũ."),
+      h("div", { class: "row" },
+        on(h("button", { class: "btn sm ghost", "data-hit": true }, "Tạo mã mới"), async () => { remoteSend({ t: "bye" }); await remoteStart(true); toast("Đã tạo mã mới. Điện thoại cũ không còn điều khiển được."); }),
+        on(h("button", { class: "btn sm danger", "data-hit": true }, "Tắt điều khiển"), () => { remoteStop(); closeRemoteModal(); toast("Đã tắt điều khiển bằng điện thoại"); }))));
+  ov.replaceChildren(card);
+}
+function initRemoteHost() {
+  paintRemoteBtn();
+  addEventListener("keydown", e => { if (e.key === "Escape" && $("#rmModal")) closeRemoteModal(); });
+  if (remoteSession() && window.LHVT_CLOUD) remoteStart(); // máy chiếu tải lại trang: giữ phiên cũ để điện thoại tự kết nối lại
 }
 
 function SettingsPage() {
@@ -4511,7 +4793,7 @@ const Cloud = (() => {
 on($("#ttsBtn"), toggleTTS); paintTTSBtn();
 new MutationObserver(() => { if (screenName !== "game") return; clearTimeout(ttsObsT); ttsObsT = setTimeout(ttsAuto, 200); }).observe(stage, { childList: true, subtree: true, characterData: true });
 addEventListener("keydown", e => { if ((e.key === "r" || e.key === "R") && screenName === "game" && !e.target.matches?.("input,textarea,select") && !e.ctrlKey && !e.metaKey) { const t = readableQ(); if (t) TTS.say(t, true); } });
-applyTheme(); applyRail(); initPWA();
+applyTheme(); applyRail(); initPWA(); initRemoteHost();
 requestAnimationFrame(loop);
 go("home");
 Cloud.init();

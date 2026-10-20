@@ -231,3 +231,34 @@ table.rt{width:100%;border-collapse:collapse}
 .upd-ic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--grad-primary);color:#fff}
 .upd-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 @media (max-width:640px){.upd-bar{left:16px;right:16px;bottom:16px;flex-wrap:wrap}}
+
+/* ================= v6.6 — chia nhóm ================= */
+.teams-wrap{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;align-items:start}
+.teams-opt{position:sticky;top:0}
+.stepper{display:inline-flex;align-items:center;gap:6px;padding:4px;border-radius:12px;background:var(--surface2);border:1px solid var(--border2);width:fit-content}
+.stepper b{min-width:44px;text-align:center;font-family:var(--display);font-size:22px}
+.stepper .ibtn{width:40px;height:40px;font-size:22px;font-weight:700}
+.teams-board{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:24px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--elev-1)}
+.teams-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.teams-empty{display:grid;place-items:center;text-align:center;padding:50px 20px;border:2px dashed var(--border2);border-radius:18px}
+.teams-grid{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:14px}
+.team-card{--tc:#0066FF;display:flex;flex-direction:column;border-radius:18px;overflow:hidden;background:var(--surface2);border:1px solid color-mix(in srgb,var(--tc) 45%,var(--border))}
+.team-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:12px 16px;background:linear-gradient(135deg,color-mix(in srgb,var(--tc) 85%,#fff 15%),var(--tc));color:#fff}
+.team-head b{font-family:var(--display);font-size:18px;letter-spacing:-.01em}
+.team-head small{opacity:.9;font-size:12px;white-space:nowrap}
+.team-list{list-style:none;margin:0;padding:8px;display:flex;flex-direction:column;gap:4px}
+.team-m{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:11px;cursor:pointer;font-weight:600;font-size:14.5px;border:1px solid transparent;transition:background .12s,border-color .12s}
+.team-m:hover,.team-m.g-hover{background:color-mix(in srgb,var(--tc) 10%,transparent)}
+.team-m.sel{border-color:var(--tc);background:color-mix(in srgb,var(--tc) 16%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--tc) 25%,transparent)}
+.team-m.rv{animation:teamIn .5s cubic-bezier(.2,1.4,.4,1) backwards}
+@keyframes teamIn{from{opacity:0;transform:translateY(-14px) scale(.85)}}
+.teams-actions{border-top:1px solid var(--border);padding-top:14px}
+.teams-board.present{position:fixed;inset:0;z-index:70;border-radius:0;padding:24px clamp(18px,3vw,48px);overflow:auto;background:radial-gradient(1200px 600px at 50% -10%,rgba(0,102,255,.25),transparent 70%),var(--bg)}
+.teams-board.present .teams-actions{display:none}
+.teams-board.present .team-head b{font-size:clamp(20px,2vw,30px)}
+.teams-board.present .team-m{font-size:clamp(15px,1.5vw,22px);padding:8px 10px}
+.teams-board.present .team-m .av.sm{width:clamp(34px,3vw,46px);height:clamp(34px,3vw,46px)}
+@media (max-width:1150px){.teams-wrap{grid-template-columns:1fr}.teams-opt{position:static;order:-1}}
+@media (max-width:900px){.teams-grid{--cols:2!important}}
+@media (max-width:560px){.teams-grid{--cols:1!important}}
+.team-head{flex-direction:column;align-items:flex-start;gap:2px}

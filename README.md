@@ -78,6 +78,22 @@ Bản web (GitHub Pages / tên miền riêng) có service worker lưu sẵn vào
 Tệp liên quan: `src/pwa/sw.js` (mẫu service worker; khi build, `vite.config.js` điền danh sách tệp và mã phiên bản rồi ghi ra `dist/sw.js`), `public/manifest.webmanifest`, `public/icons/`.
 Bản một tệp (`build:single`) không có chức năng này vì trình duyệt không cho service worker chạy với tệp mở từ ổ đĩa.
 
+## Điều khiển bằng điện thoại
+
+Nút hình **điện thoại** trên thanh trên cùng của máy chiếu → hiện mã QR. Quét bằng Camera/Zalo trên điện thoại để mở trang điều khiển (cùng địa chỉ web, có thêm `#remote=…`).
+
+- Điện thoại thấy những gì máy chiếu đang hiện: câu hỏi, đáp án A/B/C/D, các nút, danh sách trò chơi; bấm trên điện thoại = bấm trên máy chiếu.
+- Tab **Gọi tên** (quay số trên máy chiếu, cộng +1/+2/+5), **Điểm** (cộng/trừ điểm từng bạn), **Trang** (chuyển nhanh: sảnh, gọi tên, chia nhóm, xếp hạng…).
+- Hai máy **không cần chung Wi-Fi**, chỉ cần Internet. Kết nối qua **Supabase Realtime (Broadcast)**: tin nhắn chỉ chuyển tiếp, không lưu vào cơ sở dữ liệu, không cần tạo bảng.
+- Mỗi phiên có mã kênh + khóa bí mật ngẫu nhiên; tin nhắn sai khóa bị bỏ qua. **Tạo mã mới** để thu hồi quyền của các điện thoại cũ; phiên tự hết hạn sau 12 giờ không dùng.
+- Nếu điện thoại cứ báo "Đang kết nối…": kiểm tra **Supabase → Realtime → Settings**, mục cho phép kênh công khai (không bật "Private channels only").
+
+Mã nguồn: `src/remote/channel.js` (kết nối), `src/remote/phone.js` (giao diện điện thoại), phần máy chiếu nằm trong `src/app.js` (tìm "ĐIỀU KHIỂN BẰNG ĐIỆN THOẠI").
+
+## Chia nhóm ngẫu nhiên
+
+Trang **Học sinh & điểm → Chia nhóm**: chia theo số nhóm hoặc số bạn mỗi nhóm, chỉ bạn có mặt, cân bằng nam/nữ, hạn chế ghép lại như lần trước. Bấm vào 2 bạn ở 2 nhóm để đổi chỗ; có trình chiếu, xuất Excel và **Dùng làm tổ thi đua** (ghi tên nhóm vào cột Tổ để xem thi đua ở tab Xếp hạng).
+
 ## Cấu hình Supabase (tùy chọn)
 
 Không cấu hình thì trang vẫn chạy đủ chức năng, dữ liệu chỉ lưu trên từng máy.
