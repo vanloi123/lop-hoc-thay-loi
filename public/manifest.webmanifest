@@ -1,7 +1,7 @@
 {
   "name": "Lớp Học Thầy Lợi",
   "short_name": "Thầy Lợi",
-  "description": "Sân chơi ôn tập điều khiển bằng cử chỉ tay qua webcam: 23 trò chơi, soạn bộ đề, gọi tên và xếp hạng lớp học.",
+  "description": "Sân chơi ôn tập điều khiển bằng cử chỉ tay qua webcam: 28 trò chơi, soạn bộ đề, gọi tên và xếp hạng lớp học.",
   "lang": "vi",
   "start_url": "./",
   "scope": "./",

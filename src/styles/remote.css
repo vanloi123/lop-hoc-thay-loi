@@ -101,3 +101,18 @@ body.rm-phone::before{display:none}
 .rm-tab.on{color:var(--amber-ink);background:rgba(0,102,255,.1)}
 #rmToast{position:fixed;left:16px;right:16px;bottom:84px;z-index:9;margin:0 auto;max-width:520px;padding:12px 16px;border-radius:14px;background:var(--text);color:var(--bg);font-weight:600;font-size:14.5px;text-align:center;box-shadow:var(--elev-2)}
 #rmToast[hidden]{display:none}
+
+/* ---- quét thẻ trả lời trên điện thoại ---- */
+.rm-scan-btn{background:linear-gradient(135deg,#22c55e,#15803d)!important}
+.rm-scan-btn span{display:flex;flex-direction:column;align-items:flex-start}
+.rm-scan-btn small{font-size:13px;font-weight:600;opacity:.9}
+.sc-full{position:fixed;inset:0;z-index:100;background:#000;display:flex;flex-direction:column}
+.sc-stage{position:relative;flex:1;min-height:0}
+.sc-stage video,.sc-stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.sc-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:max(12px,env(safe-area-inset-top)) 14px 12px;background:linear-gradient(rgba(0,0,0,.7),transparent)}
+.sc-info{color:#fff;font-size:16px}
+.sc-info b{font-size:26px;color:#4ade80}
+.sc-x{width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;display:grid;place-items:center}
+.sc-x svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.sc-hint{margin:0;padding:12px 16px max(14px,env(safe-area-inset-bottom));color:#cbd5e1;font-size:14px;text-align:center;background:#000}
+.sc-full.idle .sc-info{color:#fbbf24}

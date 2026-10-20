@@ -21,6 +21,8 @@ const IC = {
   menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
   back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   speak: '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  scan: '<svg viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8 8h3v3H8zM13 13h3v3h-3z"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   refresh: '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
 };
 const ico = k => h("span", { class: "rm-i", html: IC[k] });
@@ -65,6 +67,7 @@ function screenTab(s) {
     s.score !== "" ? h("div", { class: "rm-score" }, h("small", {}, s.who ? `Lượt của ${s.who}` : "Điểm"), h("b", {}, s.score)) : ""));
   if (s.prog) box.append(h("div", { class: "rm-prog" }, s.prog));
   if (s.q) box.append(h("div", { class: "rm-q" }, s.q));
+  if (s.cards) box.append(h("button", { class: "rm-big rm-scan-btn", onclick: openScanner }, ico("scan"), h("span", {}, "Quét thẻ trả lời", h("small", {}, `Đã nhận ${s.cards.got}/${s.cards.total} thẻ`))));
   box.append(h("div", { class: "rm-row" },
     h("button", { class: "rm-btn", onclick: () => send({ t: "back" }) }, ico("back"), s.ing ? "Thoát về sảnh" : "Về sảnh"),
     s.q ? h("button", { class: "rm-btn", onclick: () => send({ t: "tts" }) }, ico("speak"), "Đọc câu hỏi") : ""));
@@ -115,10 +118,68 @@ function menuTab() {
     h("p", { class: "rm-note" }, "Để ngắt kết nối, chỉ cần đóng trang này. Giáo viên có thể thu hồi quyền điều khiển bằng nút “Tạo mã mới” trên máy chiếu."));
 }
 
+/* ---------- quét thẻ trả lời bằng camera sau của điện thoại ---------- */
+const SC = { on: false, stream: null, det: null, t: 0, cv: null, q: -1, seen: new Map(), sent: new Map(), pend: {}, sendT: 0, el: null };
+function cardAnswer(m) {
+  const [a, b] = m.corners, d = ((Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI) % 360 + 360) % 360, r = Math.round(d / 90);
+  if (Math.abs(d - r * 90) > 32) return -1;
+  return [0, 3, 2, 1][r % 4];
+}
+async function openScanner() {
+  if (SC.on) return;
+  const vid = h("video", { playsinline: "", muted: "", autoplay: "" }), ov = h("canvas"), info = h("div", { class: "sc-info" }, "Đang mở camera…");
+  vid.muted = true;
+  SC.el = h("div", { class: "sc-full" }, h("div", { class: "sc-stage" }, vid, ov),
+    h("div", { class: "sc-top" }, info, h("button", { class: "sc-x", "aria-label": "Đóng", onclick: closeScanner, html: IC.close })),
+    h("p", { class: "sc-hint" }, "Hướng camera về phía lớp, lia chậm qua từng dãy bàn. Khung xanh là thẻ đã nhận."));
+  SC.info = info; SC.vid = vid; SC.ov = ov; document.body.append(SC.el); SC.on = true; paintScan();
+  try {
+    if (!SC.det) { const { AR } = await import("../vendor/aruco.js"); SC.det = new AR.Detector({ dictionaryName: "ARUCO_MIP_16h3" }); }
+    SC.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    if (!SC.on) { SC.stream.getTracks().forEach(t => t.stop()); return; }
+    vid.srcObject = SC.stream; await vid.play(); SC.cv = document.createElement("canvas"); scanLoop();
+  } catch (e) {
+    info.textContent = e?.name === "NotAllowedError" ? "Chưa được phép dùng camera. Hãy cho phép camera trong cài đặt trình duyệt." : "Không mở được camera của điện thoại.";
+  }
+}
+function closeScanner() {
+  SC.on = false; clearTimeout(SC.t); SC.stream?.getTracks().forEach(t => t.stop()); SC.stream = null; SC.el?.remove(); SC.el = null;
+}
+function paintScan() {
+  if (!SC.on || !SC.info) return;
+  const c = P.state?.cards;
+  SC.info.innerHTML = c ? `<b>${c.got}/${c.total}</b> thẻ đã nhận · câu ${c.q + 1}` : "Máy chiếu chưa ở bước giơ thẻ";
+  SC.el.classList.toggle("idle", !c);
+}
+function scanLoop() {
+  if (!SC.on) return;
+  const v = SC.vid, vw = v.videoWidth, vh = v.videoHeight, c = P.state?.cards;
+  if (c && c.q !== SC.q) { SC.q = c.q; SC.seen.clear(); SC.sent.clear(); SC.pend = {}; }
+  if (vw && c) {
+    const k = Math.min(1, 1920 / Math.max(vw, vh)), w = Math.round(vw * k), hh = Math.round(vh * k);
+    if (SC.cv.width !== w || SC.cv.height !== hh) { SC.cv.width = SC.ov.width = w; SC.cv.height = SC.ov.height = hh; }
+    const x = SC.cv.getContext("2d", { willReadFrequently: true }); x.drawImage(v, 0, 0, w, hh);
+    let ms = []; try { ms = SC.det.detect(x.getImageData(0, 0, w, hh)); } catch (e) {}
+    const o = SC.ov.getContext("2d"); o.clearRect(0, 0, w, hh); o.lineWidth = Math.max(3, w / 300);
+    let fresh = false;
+    for (const m of ms) {
+      const a = cardAnswer(m); if (a < 0) continue;
+      const s = SC.seen.get(m.id); if (!s || s.a !== a) SC.seen.set(m.id, { a, k: 1 }); else s.k++;
+      const ok = SC.seen.get(m.id).k >= 2;
+      if (ok && SC.sent.get(m.id) !== a) { SC.sent.set(m.id, a); SC.pend[m.id] = a; fresh = true; }
+      o.strokeStyle = ok ? "#22c55e" : "#fbbf24"; o.fillStyle = ok ? "rgba(34,197,94,.3)" : "rgba(251,191,36,.25)";
+      o.beginPath(); m.corners.forEach((p, j) => j ? o.lineTo(p.x, p.y) : o.moveTo(p.x, p.y)); o.closePath(); o.fill(); o.stroke();
+    }
+    if (fresh) buzz(15);
+    if (Object.keys(SC.pend).length && Date.now() - SC.sendT > 400) { if (P.ch?.send({ t: "cards", m: SC.pend, tk, id: ID, dev: DEV, from: "phone" })) { SC.pend = {}; SC.sendT = Date.now(); } }
+  } else if (SC.ov.width) SC.ov.getContext("2d").clearRect(0, 0, SC.ov.width, SC.ov.height);
+  SC.t = setTimeout(scanLoop, 50);
+}
+
 function onMsg(m) {
   if (!m || m.tk !== tk || m.from === "phone") return;
   P.lastHost = Date.now();
-  if (m.t === "state") { P.state = m; if (P.tab === "screen") render(); else render(); }
+  if (m.t === "state") { P.state = m; render(); paintScan(); }
   else if (m.t === "roster") { P.roster = m; if (P.tab !== "screen") render(); }
   else if (m.t === "picked") { P.picked = m.names || []; buzz(30); if (P.tab === "pick") render(); else toast("Mời em " + P.picked.join(", ")); }
   else if (m.t === "toast") toast(m.msg);
