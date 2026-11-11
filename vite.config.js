@@ -49,7 +49,7 @@ export default defineConfig(({ mode }) => {
       outDir: single ? "dist-single" : "dist",
       target: "es2020",
       sourcemap: false,
-      chunkSizeWarningLimit: 600,
+      chunkSizeWarningLimit: 1400,
       ...(single ? { assetsInlineLimit: 100_000_000, cssCodeSplit: false } : {}),
     },
   };

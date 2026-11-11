@@ -1,0 +1,18 @@
+ẢNH CHỤP LINH KIỆN THẬT CHO TRÒ "LẮP RÁP MÁY TÍNH 3D"
+
+Nếu đặt ảnh vào thư mục này, khay linh kiện sẽ dùng ảnh chụp thật thay cho ảnh dựng từ mô hình 3D.
+Đặt tên tệp đúng như sau (định dạng .jpg, nên chụp trên nền trắng, khổ ngang 4:3):
+
+  cpu.jpg      CPU
+  cooler.jpg   Quạt tản nhiệt CPU
+  ram.jpg      RAM
+  m2.jpg       Ổ SSD M.2
+  mb.jpg       Bo mạch chủ
+  psu.jpg      Bộ nguồn
+  gpu.jpg      Card đồ họa
+  hdd.jpg      Ổ cứng HDD
+  atx24.jpg    Cáp nguồn 24 chân
+  cpu8.jpg     Cáp nguồn CPU 8 chân
+
+Thiếu tệp nào thì trò chơi tự dùng ảnh dựng từ mô hình 3D cho linh kiện đó.
+Chỉ dùng ảnh do thầy tự chụp hoặc ảnh được phép sử dụng.
