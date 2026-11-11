@@ -163,6 +163,7 @@ const I = { // biểu tượng trò chơi (nét vẽ 48×48)
   crossword: '<svg viewBox="0 0 48 48"><rect x="4" y="6" width="10" height="10" rx="2"/><rect x="14" y="6" width="10" height="10" rx="2"/><rect x="24" y="6" width="10" height="10" rx="2"/><rect x="14" y="19" width="10" height="10" rx="2"/><rect x="24" y="19" width="10" height="10" rx="2"/><rect x="34" y="19" width="10" height="10" rx="2"/><rect x="8" y="32" width="10" height="10" rx="2"/><rect x="18" y="32" width="10" height="10" rx="2"/><path d="M19 2v44" stroke-dasharray="2 4"/></svg>',
   fish: '<svg viewBox="0 0 48 48"><path d="M5 30c6-9 18-12 28-4l9-6v20l-9-6C23 42 11 39 5 30z"/><circle cx="13" cy="28" r="1.6"/><path d="M26 3v12a4 4 0 1 1-4-4"/></svg>',
   boat: '<svg viewBox="0 0 48 48"><path d="M5 31h38l-6 9H11z"/><path d="M24 5v24M25 7l12 18H25M23 11l-9 14h9"/><path d="M4 45c4 0 4-2 8-2s4 2 8 2 4-2 8-2 4 2 8 2 4-2 8-2"/></svg>',
+  pcbuild: '<svg viewBox="0 0 48 48"><rect x="10" y="4" width="22" height="40" rx="2.5"/><rect x="14" y="9" width="14" height="16" rx="1"/><rect x="18" y="13" width="6" height="6"/><path d="M14 30h14M14 34h9M21 40h.01"/><path d="M32 18h6a3 3 0 0 1 3 3v12"/></svg>',
   cards: '<svg viewBox="0 0 48 48"><rect x="8" y="6" width="32" height="36" rx="3"/><path d="M15 14h7v7h-7zM26 25h7v7h-7zM26 14h7M15 32h7M15 25h3"/><path d="M24 1v3M24 44v3"/></svg>',
   shout: '<svg viewBox="0 0 48 48"><path d="M6 19v10h7l14 9V10l-14 9z"/><path d="M33 17a9 9 0 0 1 0 14M38 12a16 16 0 0 1 0 24"/></svg>',
   snake: '<svg viewBox="0 0 48 48"><rect x="4" y="4" width="40" height="40" rx="5"/><path d="M13 37l14-26M19 40l14-26M15 30l9 4M19 23l9 4M23 16l9 4"/><path d="M38 38c-5 1-7-5-12-3"/></svg>',
@@ -2439,6 +2440,19 @@ function gameShout(st, data, g) {
   return () => { ts.forEach(clearTimeout); Mic.close(); };
 }
 
+/* ================= 31. MÔ PHỎNG 3D: LẮP RÁP MÁY TÍNH =================
+   Mã 3D (three.js) nằm ở src/sim/pcbuild.js và chỉ được tải khi mở trò này. */
+function gamePcBuild(st, data, g) {
+  let stop = null, gone = false;
+  const wait = h("div", { class: "center" }, h("p", { class: "muted" }, "Đang dựng mô hình 3D…")); st.append(wait);
+  import("./sim/pcbuild.js").then(m => {
+    if (gone) return; wait.remove();
+    try { stop = m.default(st, g, { h, on, Sfx, FX, toast, TTS, hud, Result }); }
+    catch (e) { console.error(e); st.append(h("div", { class: "center" }, h("p", {}, "Máy này chưa chạy được mô hình 3D (trình duyệt cần hỗ trợ WebGL). Hãy thử Chrome hoặc Edge bản mới."))); }
+  }).catch(e => { console.error(e); wait.textContent = "Không tải được phần mô phỏng 3D. Hãy tải lại trang."; });
+  return () => { gone = true; stop?.(); };
+}
+
 /* ================= 17. BINGO ================= */
 function gameBingo(st, data, g) {
   const all = clueItems(data); let N = +G("bingo", "size"); while (N > 3 && all.length < N * N) N--;
@@ -2783,7 +2797,7 @@ function gameBomb(st, data, g) {
   render(); return () => ts.forEach(clearTimeout);
 }
 
-const CATS = ["Tất cả", "Trả lời", "Thử thách", "Ghi nhớ", "Sắp xếp", "Vận động", "Từ vựng", "Thi đấu đội"];
+const CATS = ["Tất cả", "Mô phỏng 3D", "Trả lời", "Thử thách", "Ghi nhớ", "Sắp xếp", "Vận động", "Từ vựng", "Thi đấu đội"];
 const GAMES = [
   { id: "quiz", name: "Trắc nghiệm nhanh", cat: "Trả lời", icon: I.quiz, color: "var(--amber)", who: "Cá nhân",
     desc: "Chọn 1 trong 4 đáp án trước khi hết giờ. Trả lời nhanh được thêm điểm.",
@@ -2904,11 +2918,16 @@ const GAMES = [
   { id: "shout", name: "Hô to đáp án", cat: "Thử thách", icon: I.shout, color: "var(--rose)", who: "Cả lớp", isNew: true, team: true,
     desc: "Từng đáp án sáng lên, bạn nào chọn đáp án đó thì hô thật to. Micro đo xem cả lớp chọn gì.",
     how: "Bật micro và để cả lớp im lặng 2 giây cho máy đo tiếng ồn nền. Mỗi câu, các đáp án lần lượt sáng lên kèm hiệu lệnh 3–2–1–HÔ! Ai chọn đáp án nào thì chỉ hô ở lượt của đáp án đó. Đáp án có tiếng hô to nhất là lựa chọn của cả lớp; đúng thì cả lớp được điểm.",
-    ok: d => d.quiz.length + d.tf.length > 0, count: d => `${Math.min(G("shout", "count"), d.quiz.length + d.tf.length)} câu`, run: gameShout }
+    ok: d => d.quiz.length + d.tf.length > 0, count: d => `${Math.min(G("shout", "count"), d.quiz.length + d.tf.length)} câu`, run: gameShout },
+  { id: "pcbuild", name: "Lắp ráp máy tính 3D", cat: "Mô phỏng 3D", icon: I.pcbuild, color: "var(--indigo)", who: "Cá nhân", isNew: true,
+    desc: "Lắp CPU, RAM, ổ cứng, card đồ họa… vào bo mạch chủ và thùng máy trên mô hình 3D, rồi bật nguồn cho máy chạy.",
+    how: "Chọn linh kiện trong khay bên trái, rồi chạm vào đúng chỗ lắp trên mô hình. Chế độ Học hướng dẫn từng bước kèm chức năng của mỗi linh kiện; chế độ Thử thách chỉ đánh số các vị trí, lắp sai bị trừ điểm. Kéo trên mô hình hoặc dùng nút xoay để nhìn từ góc khác.",
+    ok: () => true, count: () => "10 linh kiện", run: gamePcBuild }
 ];
 
 /* ---------- thông tin hiển thị ở sảnh: nhóm, cử chỉ, người chơi ---------- */
 const CAT_INFO = {
+  "Mô phỏng 3D": { slug: "sim", d: "Thực hành trên mô hình 3D, không cần bộ đề" },
   "Trả lời": { slug: "answer", d: "Trắc nghiệm, đúng sai, ô cửa câu hỏi" },
   "Thử thách": { slug: "challenge", d: "Có leo nấc, may rủi và đồng hồ đếm ngược" },
   "Ghi nhớ": { slug: "memory", d: "Ghép cặp, lật thẻ, dò bảng Bingo" },
@@ -2929,7 +2948,7 @@ const GEST = {
   slap: ["Chạm nhanh", '<svg viewBox="0 0 24 24"><path d="M12 3v4M5.6 5.6l2.8 2.8M18.4 5.6l-2.8 2.8"/><circle cx="12" cy="15" r="5"/></svg>']
 };
 const GEST_OF = { quiz: "tap", tf: "tap", tiles: "tap", match: "link", memory: "tap", sort: "drag", order: "drag", bubble: "slap", slice: "swing", catch: "steer",
-  word: "tap", scramble: "drag", tug: "tap", millionaire: "tap", wheel: "swipe", bomb: "tap", bingo: "tap", tower: "drag", race: "steer", mole: "slap", hoop: "drag", search: "link", buzz: "slap", bell: "tap", crossword: "tap", fish: "steer", boat: "tap", snake: "tap", cards: "card", shout: "voice" };
+  word: "tap", scramble: "drag", tug: "tap", millionaire: "tap", wheel: "swipe", bomb: "tap", bingo: "tap", tower: "drag", race: "steer", mole: "slap", hoop: "drag", search: "link", buzz: "slap", bell: "tap", crossword: "tap", fish: "steer", boat: "tap", snake: "tap", cards: "card", shout: "voice", pcbuild: "tap" };
 const WHO_ICON = {
   "Cá nhân": '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20.5a7 7 0 0 1 14 0"/></svg>',
   "Cả lớp": '<svg viewBox="0 0 24 24"><circle cx="8" cy="8.5" r="3"/><circle cx="16.5" cy="8.5" r="3"/><path d="M2.5 19.5a5.6 5.6 0 0 1 11 0M12.5 15.2a5.6 5.6 0 0 1 9 4.3"/></svg>',
@@ -3826,7 +3845,7 @@ function Intro(g) {
     const idata = parseSet(curSet()), optBox = h("div", { class: "gopt-box" });
     let optOpen = false;
     const paintOpt = () => {
-      optBox.innerHTML = "";
+      optBox.innerHTML = ""; optBox.hidden = !GAME_OPTS[g.id]; if (!GAME_OPTS[g.id]) return;
       const pr = presetOf(g.id), lvl = { default: "Mặc định", easy: "Dễ", normal: "Vừa", hard: "Khó", custom: "Tùy chỉnh" }[pr] || "";
       optBox.append(h("div", { class: "gopt-sum" },
         h("b", {}, "Thiết lập"), lvl ? h("span", { class: "badge" + (pr === "custom" || pr === "default" ? "" : " lvl") }, lvl) : null,
@@ -5191,10 +5210,10 @@ function SettingsPage() {
       return h("label", { class: "check", for: id, style: "align-items:flex-start" }, c, h("span", {}, label, sub ? h("small", { class: "muted", style: "display:block;font-weight:400" }, sub) : null)); };
     const pct = v => Math.round(v * 100) + "%";
     /* thiết lập riêng cho từng trò chơi */
-    let gsel = SettingsPage.gsel || GAMES[0].id; const gchips = h("div", { class: "filters" }), gpanel = h("div", { class: "stack" });
+    let gsel = SettingsPage.gsel && GAME_OPTS[SettingsPage.gsel] ? SettingsPage.gsel : GAMES[0].id; const gchips = h("div", { class: "filters" }), gpanel = h("div", { class: "stack" });
     const paintG = () => {
       SettingsPage.gsel = gsel; gchips.innerHTML = ""; gpanel.innerHTML = "";
-      GAMES.forEach(gm => gchips.append(on(h("button", { class: "fchip sm" + (gsel === gm.id ? " active" : ""), "data-hit": true }, gm.name, S.games[gm.id] && Object.keys(S.games[gm.id]).length ? h("i", { class: "cdot", title: "Đã chỉnh riêng" }) : null), () => { gsel = gm.id; paintG(); })));
+      GAMES.filter(gm => GAME_OPTS[gm.id]).forEach(gm => gchips.append(on(h("button", { class: "fchip sm" + (gsel === gm.id ? " active" : ""), "data-hit": true }, gm.name, S.games[gm.id] && Object.keys(S.games[gm.id]).length ? h("i", { class: "cdot", title: "Đã chỉnh riêng" }) : null), () => { gsel = gm.id; paintG(); })));
       const gm = GAMES.find(x => x.id === gsel);
       gpanel.append(h("div", { class: "row", style: "gap:12px" }, h("span", { class: "gicon-sm", style: `--c:${gm.color}`, html: gm.icon }), h("div", {}, h("b", {}, gm.name), h("p", { class: "muted", style: "margin:2px 0 0;font-size:13.5px" }, gm.desc))),
         gameOptsPanel(gm, parseSet(curSet()), paintG));
