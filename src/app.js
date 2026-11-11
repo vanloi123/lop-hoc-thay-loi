@@ -163,6 +163,7 @@ const I = { // biểu tượng trò chơi (nét vẽ 48×48)
   crossword: '<svg viewBox="0 0 48 48"><rect x="4" y="6" width="10" height="10" rx="2"/><rect x="14" y="6" width="10" height="10" rx="2"/><rect x="24" y="6" width="10" height="10" rx="2"/><rect x="14" y="19" width="10" height="10" rx="2"/><rect x="24" y="19" width="10" height="10" rx="2"/><rect x="34" y="19" width="10" height="10" rx="2"/><rect x="8" y="32" width="10" height="10" rx="2"/><rect x="18" y="32" width="10" height="10" rx="2"/><path d="M19 2v44" stroke-dasharray="2 4"/></svg>',
   fish: '<svg viewBox="0 0 48 48"><path d="M5 30c6-9 18-12 28-4l9-6v20l-9-6C23 42 11 39 5 30z"/><circle cx="13" cy="28" r="1.6"/><path d="M26 3v12a4 4 0 1 1-4-4"/></svg>',
   boat: '<svg viewBox="0 0 48 48"><path d="M5 31h38l-6 9H11z"/><path d="M24 5v24M25 7l12 18H25M23 11l-9 14h9"/><path d="M4 45c4 0 4-2 8-2s4 2 8 2 4-2 8-2 4 2 8 2 4-2 8-2"/></svg>',
+  algo: '<svg viewBox="0 0 48 48"><rect x="5" y="8" width="38" height="30" rx="3"/><path d="M13 18l5 5-5 5M22 28h9"/><path d="M14 42h20"/></svg>',
   vlan: '<svg viewBox="0 0 48 48"><rect x="14" y="5" width="20" height="9" rx="2"/><path d="M19 9.5h.01M24 9.5h.01M29 9.5h.01M24 14v7M10 21h28M10 21v7M24 21v7M38 21v7"/><rect x="5" y="28" width="10" height="8" rx="1.5"/><rect x="19" y="28" width="10" height="8" rx="1.5"/><rect x="33" y="28" width="10" height="8" rx="1.5"/><path d="M8 41h4M22 41h4M36 41h4"/></svg>',
   pcbuild: '<svg viewBox="0 0 48 48"><rect x="10" y="4" width="22" height="40" rx="2.5"/><rect x="14" y="9" width="14" height="16" rx="1"/><rect x="18" y="13" width="6" height="6"/><path d="M14 30h14M14 34h9M21 40h.01"/><path d="M32 18h6a3 3 0 0 1 3 3v12"/></svg>',
   cards: '<svg viewBox="0 0 48 48"><rect x="8" y="6" width="32" height="36" rx="3"/><path d="M15 14h7v7h-7zM26 25h7v7h-7zM26 14h7M15 32h7M15 25h3"/><path d="M24 1v3M24 44v3"/></svg>',
@@ -2443,7 +2444,7 @@ function gameShout(st, data, g) {
 
 /* ================= 31. MÔ PHỎNG 3D: LẮP RÁP MÁY TÍNH =================
    Mã 3D (three.js) nằm ở src/sim/pcbuild.js và chỉ được tải khi mở trò này. */
-const SIM_MODULES = { pcbuild: () => import("./sim/pcbuild.js"), vlan: () => import("./sim/vlan.js") };
+const SIM_MODULES = { pcbuild: () => import("./sim/pcbuild.js"), vlan: () => import("./sim/vlan.js"), algo: () => import("./sim/algo.js") };
 function gamePcBuild(st, data, g) {
   let stop = null, gone = false;
   const wait = h("div", { class: "center" }, h("p", { class: "muted" }, "Đang dựng mô hình 3D…")); st.append(wait);
@@ -2799,7 +2800,7 @@ function gameBomb(st, data, g) {
   render(); return () => ts.forEach(clearTimeout);
 }
 
-const CATS = ["Tất cả", "Mô phỏng 3D", "Trả lời", "Thử thách", "Ghi nhớ", "Sắp xếp", "Vận động", "Từ vựng", "Thi đấu đội"];
+const CATS = ["Tất cả", "Mô phỏng", "Trả lời", "Thử thách", "Ghi nhớ", "Sắp xếp", "Vận động", "Từ vựng", "Thi đấu đội"];
 const GAMES = [
   { id: "quiz", name: "Trắc nghiệm nhanh", cat: "Trả lời", icon: I.quiz, color: "var(--amber)", who: "Cá nhân",
     desc: "Chọn 1 trong 4 đáp án trước khi hết giờ. Trả lời nhanh được thêm điểm.",
@@ -2921,19 +2922,23 @@ const GAMES = [
     desc: "Từng đáp án sáng lên, bạn nào chọn đáp án đó thì hô thật to. Micro đo xem cả lớp chọn gì.",
     how: "Bật micro và để cả lớp im lặng 2 giây cho máy đo tiếng ồn nền. Mỗi câu, các đáp án lần lượt sáng lên kèm hiệu lệnh 3–2–1–HÔ! Ai chọn đáp án nào thì chỉ hô ở lượt của đáp án đó. Đáp án có tiếng hô to nhất là lựa chọn của cả lớp; đúng thì cả lớp được điểm.",
     ok: d => d.quiz.length + d.tf.length > 0, count: d => `${Math.min(G("shout", "count"), d.quiz.length + d.tf.length)} câu`, run: gameShout },
-  { id: "pcbuild", name: "Lắp ráp máy tính 3D", cat: "Mô phỏng 3D", icon: I.pcbuild, color: "var(--indigo)", who: "Cá nhân", isNew: true,
+  { id: "pcbuild", name: "Lắp ráp máy tính 3D", cat: "Mô phỏng", icon: I.pcbuild, color: "var(--indigo)", who: "Cá nhân", isNew: true,
     desc: "Lắp CPU, RAM, ổ cứng, card đồ họa… vào bo mạch chủ và thùng máy trên mô hình 3D, rồi bật nguồn cho máy chạy.",
     how: "Chọn linh kiện trong khay bên trái, rồi chạm vào đúng chỗ lắp trên mô hình. Chế độ Học hướng dẫn từng bước kèm chức năng của mỗi linh kiện; chế độ Thử thách chỉ đánh số các vị trí, lắp sai bị trừ điểm. Kéo trên mô hình hoặc dùng nút xoay để nhìn từ góc khác.",
     ok: () => true, count: () => "10 linh kiện", run: gamePcBuild },
-  { id: "vlan", name: "Lắp mạng VLAN 3D", cat: "Mô phỏng 3D", icon: I.vlan, color: "var(--teal)", who: "Cá nhân", isNew: true,
+  { id: "vlan", name: "Lắp mạng VLAN 3D", cat: "Mô phỏng", icon: I.vlan, color: "var(--teal)", who: "Cá nhân", isNew: true,
     desc: "Nối cáp cho phòng giáo viên và phòng máy học sinh, chia hai VLAN trên switch, cấu hình router rồi ping thử.",
     how: "Làm theo các thẻ bên phải: Nối cáp (chọn máy rồi chọn cổng switch), Switch (tạo VLAN, đặt cổng access hoặc trunk), Router (tạo cổng con cho từng VLAN), Kiểm tra (ping giữa các máy). Gói tin chạy trên dây theo màu VLAN; khung bên trái hiện lệnh Cisco tương ứng với mỗi thao tác.",
-    ok: () => true, count: () => "7 nhiệm vụ", run: gamePcBuild }
+    ok: () => true, count: () => "7 nhiệm vụ", run: gamePcBuild },
+  { id: "algo", name: "Thuật toán Python", cat: "Mô phỏng", icon: I.algo, color: "var(--violet)", who: "Cá nhân", isNew: true,
+    desc: "Xem mã Python chạy từng dòng: hai con trỏ, cửa sổ trượt, tìm kiếm nhị phân, các cách sắp xếp, có con trỏ và biến thay đổi trực quan.",
+    how: "Chọn một thuật toán ở cột trái. Bấm Chạy để xem tự động, hoặc bấm mũi tên để đi từng bước: dòng code đang chạy được tô sáng, danh sách và các con trỏ di chuyển, bảng biến cập nhật. Có thể nhập dữ liệu của mình. Chế độ Điền code: chọn đúng đoạn code cho các chỗ trống rồi mới chạy được.",
+    ok: () => true, count: () => "9 thuật toán", run: gamePcBuild }
 ];
 
 /* ---------- thông tin hiển thị ở sảnh: nhóm, cử chỉ, người chơi ---------- */
 const CAT_INFO = {
-  "Mô phỏng 3D": { slug: "sim", d: "Thực hành trên mô hình 3D, không cần bộ đề" },
+  "Mô phỏng": { slug: "sim", d: "Thực hành trên mô hình 3D và mô phỏng lập trình, không cần bộ đề" },
   "Trả lời": { slug: "answer", d: "Trắc nghiệm, đúng sai, ô cửa câu hỏi" },
   "Thử thách": { slug: "challenge", d: "Có leo nấc, may rủi và đồng hồ đếm ngược" },
   "Ghi nhớ": { slug: "memory", d: "Ghép cặp, lật thẻ, dò bảng Bingo" },
@@ -2954,7 +2959,7 @@ const GEST = {
   slap: ["Chạm nhanh", '<svg viewBox="0 0 24 24"><path d="M12 3v4M5.6 5.6l2.8 2.8M18.4 5.6l-2.8 2.8"/><circle cx="12" cy="15" r="5"/></svg>']
 };
 const GEST_OF = { quiz: "tap", tf: "tap", tiles: "tap", match: "link", memory: "tap", sort: "drag", order: "drag", bubble: "slap", slice: "swing", catch: "steer",
-  word: "tap", scramble: "drag", tug: "tap", millionaire: "tap", wheel: "swipe", bomb: "tap", bingo: "tap", tower: "drag", race: "steer", mole: "slap", hoop: "drag", search: "link", buzz: "slap", bell: "tap", crossword: "tap", fish: "steer", boat: "tap", snake: "tap", cards: "card", shout: "voice", pcbuild: "tap", vlan: "tap" };
+  word: "tap", scramble: "drag", tug: "tap", millionaire: "tap", wheel: "swipe", bomb: "tap", bingo: "tap", tower: "drag", race: "steer", mole: "slap", hoop: "drag", search: "link", buzz: "slap", bell: "tap", crossword: "tap", fish: "steer", boat: "tap", snake: "tap", cards: "card", shout: "voice", pcbuild: "tap", vlan: "tap", algo: "tap" };
 const WHO_ICON = {
   "Cá nhân": '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20.5a7 7 0 0 1 14 0"/></svg>',
   "Cả lớp": '<svg viewBox="0 0 24 24"><circle cx="8" cy="8.5" r="3"/><circle cx="16.5" cy="8.5" r="3"/><path d="M2.5 19.5a5.6 5.6 0 0 1 11 0M12.5 15.2a5.6 5.6 0 0 1 9 4.3"/></svg>',
