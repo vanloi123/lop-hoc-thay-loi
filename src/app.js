@@ -104,7 +104,7 @@ function newSet(fields = {}) {
   const s = { id: "set-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: "Bộ đề mới", subject: "", grade: "", date: "", topic: "", tags: [], fav: false, archived: false, created: Date.now(), updated: Date.now(), lastUsed: 0, _v: 2 };
   SECS.forEach(x => s[x.k] = ""); return Object.assign(s, fields);
 }
-const setMeta = s => [s.subject, s.grade, s.topic].filter(Boolean).join(" · ") || "Chưa phân loại";
+const setMeta = s => [s.subject, s.grade, s.topic].filter(Boolean).join(", ") || "Chưa phân loại";
 const setTotal = s => { const d = parseSet(s); return SECS.reduce((a, x) => a + d[x.k].length, 0); };
 const pad2 = n => String(n).padStart(2, "0");
 const todayStr = (off = 0) => { const d = new Date(); d.setDate(d.getDate() + off); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
@@ -197,8 +197,10 @@ const STAR = '<svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 
 /* ---------------- trạng thái ---------------- */
 const DEF = { mode: "both", dwellMs: 1100, margin: 0.14, hands: 2, qCount: 10, qTime: 20, sound: true, showCam: false,
   handStyle: "auto", handSize: 1, handOpacity: 0.92, smooth: 1.4, bgCam: 0.12, pinchOn: 0.3,
-  view: "ar", bgDim: 0.16, grab: true, theme: "dark", calibrated: false, tts: false, ttsOpts: true, ttsRate: 1, ttsVoice: "", ttsEngine: "auto" };
+  view: "ar", bgDim: 0.16, grab: true, theme: "light", calibrated: false, tts: false, ttsOpts: true, ttsRate: 1, ttsVoice: "", ttsEngine: "auto" };
 const S = Object.assign({}, DEF, store.get("lhvt2.settings", {}));
+/* v7.0: giao diện mới mặc định là "Giấy" (sáng) — chuyển một lần cho máy đã dùng bản cũ */
+if (S.uiV !== 7) { S.theme = "light"; S.uiV = 7; }
 let SETS = store.get("lhvt2.sets", null) || store.get("lhvt.sets", null);
 if (!Array.isArray(SETS) || !SETS.length) SETS = JSON.parse(JSON.stringify(SAMPLE_SETS));
 SETS.forEach(s => { SECS.forEach(x => { if (typeof s[x.k] !== "string") s[x.k] = (SAMPLE_SETS.find(o => o.id === s.id) || {})[x.k] || ""; }); });
@@ -3588,6 +3590,7 @@ function applyRail() {
 addEventListener("resize", () => { if (!S.rail || S.rail === "auto") applyRail(); });
 function applyTheme() {
   document.body.classList.toggle("light", S.theme === "light");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", S.theme === "light" ? "#f3f5f9" : "#17221d");
   $("#themeBtn").innerHTML = S.theme === "light"
     ? '<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
     : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
@@ -3633,16 +3636,10 @@ const normSearch = s => baseChar(String(s || "")).toLowerCase().replace(/[^a-z0-
 const matchQ = (text, q) => { const t = " " + normSearch(text) + " "; return normSearch(q).split(" ").filter(Boolean).every(w => t.includes(" " + w) ); };
 let homePick = "recent";
 function gameCover(g, big) { return gameArt(g, big); }
-/* ảnh bìa trò chơi: nền màu theo trò, hoa văn theo nhóm, biểu tượng lớn */
-function gameArt(g, big) {
-  const slug = CAT_INFO[g.cat]?.slug || "answer";
-  return h("div", { class: "gart" + (big ? " big" : ""), "data-pat": slug },
-    h("span", { class: "gart-pat" }), h("span", { class: "gart-glyph", html: g.icon }),
-    big ? h("span", { class: "gart-chip", html: g.icon }) : null,
-    g.isNew && !big ? h("span", { class: "gnew" }, "Mới") : null,
-    big ? null : h("span", { class: "gwho", html: (WHO_ICON[g.who] || "") + `<span>${g.who}</span>` }));
-}
-const gestTag = g => { const [l, ic] = GEST[g.gest] || GEST.tap; return h("span", { class: "gest", html: ic + `<span>${l}</span>` }); };
+/* ô biểu tượng trò chơi: nền nhạt theo màu trò, nét vẽ cùng màu, không ảnh bìa */
+function gameArt(g, big) { return h("span", { class: "gicon" + (big ? " big" : ""), style: `--c:${g.color}`, html: g.icon, "aria-hidden": "true" }); }
+const gestTag = g => { const [l, ic] = GEST[g.gest] || GEST.tap; return h("span", { class: "gmeta", html: ic + `<span>${l}</span>` }); };
+const whoTag = g => h("span", { class: "gmeta", html: (WHO_ICON[g.who] || "") + `<span>${g.who}</span>` });
 const RECENT_KEY = "lhvt4.recentGames";
 const recentGames = () => store.get(RECENT_KEY, []).map(r => ({ ...r, g: GAMES.find(x => x.id === r.id) })).filter(r => r.g);
 function noteRecent(id) { const l = store.get(RECENT_KEY, []).filter(r => r.id !== id); l.unshift({ id, at: Date.now(), n: (store.get(RECENT_KEY, []).find(r => r.id === id)?.n || 0) + 1 }); store.set(RECENT_KEY, l.slice(0, 8)); }
@@ -3650,72 +3647,57 @@ const agoTxt = t => { const m = Math.round((Date.now() - t) / 60000); return m <
 
 /* thẻ trò chơi trong sảnh */
 function gameCard(g, data) {
-  const ok = g.ok(data), p = presetOf(g.id);
-  const c = h("button", { class: "gcard", "data-hit": true, "data-gid": g.id, style: `--c:${g.color}`, disabled: !ok, "aria-label": `${g.name}: ${g.desc}` },
-    gameArt(g),
-    h("div", { class: "gbody" },
-      h("span", { class: "gname" }, g.name),
-      h("span", { class: "gdesc" }, g.desc),
-      h("span", { class: "gfoot" }, gestTag(g),
-        h("span", { class: "gcount" }, ok ? g.count(data) : "Bộ đề thiếu dữ liệu"),
-        p && !["normal", "default"].includes(p) ? h("span", { class: "glv" }, { easy: "Dễ", hard: "Khó", custom: "Tùy chỉnh" }[p]) : null,
-        h("span", { class: "gplay", html: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>' }))));
+  const ok = g.ok(data), p = presetOf(g.id), lv = p && !["normal", "default"].includes(p) ? { easy: "Dễ", hard: "Khó", custom: "Tùy chỉnh" }[p] : "";
+  const c = h("button", { class: "gk", "data-hit": true, "data-gid": g.id, style: `--c:${g.color}`, disabled: !ok, "aria-label": `${g.name}. ${g.desc}` },
+    h("span", { class: "gk-top" }, gameArt(g), g.isNew ? h("span", { class: "gk-new" }, "Mới!") : null),
+    h("span", { class: "gname" }, g.name),
+    h("span", { class: "gk-desc" }, g.desc),
+    h("span", { class: "gk-foot" }, gestTag(g), whoTag(g),
+      h("span", { class: "gk-count" + (ok ? "" : " warn") }, ok ? g.count(data) : "Bộ đề chưa đủ câu"),
+      lv ? h("span", { class: "gk-lv" }, lv) : null));
   on(c, () => Intro(g)); return c;
 }
-/* sảnh chọn trò chơi: tiêu đề, bộ lọc, gợi ý hôm nay, các nhóm trò */
+/* sảnh chọn trò chơi: tiêu đề, bộ lọc theo nhóm, chơi lại gần đây, các nhóm trò */
 function Lobby(data, set) {
-  const usable = GAMES.filter(g => g.ok(data)), root = h("section", { class: "lobby", id: "lobby" });
-  const body = h("div", { class: "lobby-body" }), tabs = h("div", { class: "ltabs", role: "tablist", "aria-label": "Nhóm trò chơi" });
-  const dice = on(h("button", { class: "btn dice", "data-hit": true, title: "Để máy chọn giúp một trò" },
-    h("span", { class: "dice-ic", html: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="8.5" cy="8.5" r="1.3"/><circle cx="15.5" cy="15.5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="15.5" cy="8.5" r="1.3"/><circle cx="8.5" cy="15.5" r="1.3"/></svg>' }), "Chọn ngẫu nhiên"), () => roulette());
-  root.append(h("div", { class: "lobby-head" },
-    h("div", {}, h("h2", {}, "Chọn trò chơi"), h("p", {}, `${usable.length} trên ${GAMES.length} trò chơi dùng được với bộ đề “${set.name}”.`)), dice), tabs, body);
+  const usable = GAMES.filter(g => g.ok(data)), root = h("section", { class: "lobby2", id: "lobby" });
+  const body = h("div", { class: "lb-body" }), tabs = h("div", { class: "lb-tabs", role: "tablist", "aria-label": "Nhóm trò chơi" });
+  const dice = on(h("button", { class: "btn", "data-hit": true, title: "Để máy chọn giúp một trò" },
+    h("span", { class: "ico", html: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="8.5" cy="8.5" r="1.3"/><circle cx="15.5" cy="15.5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="15.5" cy="8.5" r="1.3"/><circle cx="8.5" cy="15.5" r="1.3"/></svg>' }), "Chọn giúp tôi"), () => roulette());
+  root.append(h("div", { class: "lb-head" },
+    h("div", {}, h("h2", {}, "Chọn trò chơi"), h("p", {}, usable.length === GAMES.length ? `Cả ${GAMES.length} trò đều chơi được với bộ đề này.` : `${usable.length} trong ${GAMES.length} trò chơi được với bộ đề này.`)), dice), tabs, body);
   const paintTabs = () => {
     tabs.innerHTML = "";
     CATS.forEach(c => {
       const n = c === "Tất cả" ? GAMES.length : GAMES.filter(g => g.cat === c).length;
-      tabs.append(on(h("button", { class: "ltab" + (c === homeFilter ? " active" : ""), role: "tab", "aria-selected": c === homeFilter ? "true" : "false", "data-hit": true }, h("span", {}, c), h("b", {}, n)), () => {
+      tabs.append(on(h("button", { class: "lb-tab" + (c === homeFilter ? " active" : ""), role: "tab", "aria-selected": c === homeFilter ? "true" : "false", "data-hit": true }, h("span", {}, c), h("small", {}, n)), () => {
         if (homeFilter === c) return; homeFilter = c; paintTabs(); paintBody(true);
       }));
     });
   };
-  function spotlight() {
-    const rec = recentGames().filter(r => r.g.ok(data)), news = GAMES.filter(g => g.isNew && g.ok(data));
-    const pool = news.length ? news : usable; if (!pool.length) return null;
-    const day = Math.floor(Date.now() / 864e5), cont = rec[0];
-    const g = cont ? cont.g : pool[day % pool.length];
-    const feat = h("div", { class: "feat", style: `--c:${g.color}` }, gameArt(g, true),
-      h("div", { class: "feat-txt" },
-        h("span", { class: "feat-lbl" }, cont ? `Chơi tiếp · lần trước ${agoTxt(cont.at)}` : "Gợi ý hôm nay"),
-        h("h3", {}, g.name), h("p", {}, g.desc),
-        h("div", { class: "feat-tags" }, gestTag(g), h("span", { class: "gest", html: (WHO_ICON[g.who] || "") + `<span>${g.who}</span>` }), h("span", { class: "gest plain" }, g.count(data))),
-        h("div", { class: "row" }, on(h("button", { class: "btn primary lg", "data-hit": true }, "Chơi ngay"), () => Intro(g)))));
-    const side = h("div", { class: "side-list" });
-    const list = cont ? rec.slice(1, 5) : [];
-    const rows = list.length ? list.map(r => [r.g, `${r.n} lượt · ${agoTxt(r.at)}`]) : news.filter(x => x !== g).slice(0, 4).map(x => [x, x.cat]);
-    side.append(h("h3", {}, list.length ? "Chơi gần đây" : "Trò mới thêm"));
-    rows.forEach(([x, sub]) => side.append(on(h("button", { class: "srow", "data-hit": true, style: `--c:${x.color}` }, h("span", { class: "srow-ic", html: x.icon }), h("span", { class: "srow-t" }, h("b", {}, x.name), h("small", {}, sub)), h("span", { class: "srow-go", html: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>' })), () => Intro(x))));
-    if (!rows.length) return h("div", { class: "spot one" }, feat);
-    return h("div", { class: "spot" }, feat, side);
+  function recentRow() {
+    const rec = recentGames().filter(r => r.g.ok(data)).slice(0, 5); if (!rec.length) return null;
+    return h("div", { class: "lb-recent" }, h("span", { class: "lb-recent-l" }, "Chơi lại"),
+      rec.map(r => on(h("button", { class: "lb-rc", "data-hit": true, style: `--c:${r.g.color}`, title: `${r.n} lượt, lần cuối ${agoTxt(r.at)}` }, gameArt(r.g), h("span", { class: "gname" }, r.g.name)), () => Intro(r.g))));
   }
   function paintBody(anim) {
     body.innerHTML = "";
     if (homeFilter === "Tất cả") {
-      const sp = spotlight(); if (sp) body.append(sp);
+      const rr = recentRow(); if (rr) body.append(rr);
       CATS.slice(1).forEach(c => {
         const gs = GAMES.filter(g => g.cat === c); if (!gs.length) return;
-        body.append(h("div", { class: "lgroup", "data-pat": CAT_INFO[c]?.slug },
-          h("div", { class: "lgroup-head" }, h("h3", {}, c), h("p", {}, CAT_INFO[c]?.d || ""), h("span", { class: "lgroup-n" }, `${gs.length} trò`)),
-          h("div", { class: "games" }, gs.map(g => gameCard(g, data)))));
+        body.append(h("div", { class: "lb-group" },
+          h("div", { class: "lb-ghead" }, h("h3", {}, c), h("p", {}, CAT_INFO[c]?.d || "")),
+          h("div", { class: "lb-grid" }, gs.map(g => gameCard(g, data)))));
       });
     } else {
-      body.append(h("p", { class: "lgroup-desc" }, CAT_INFO[homeFilter]?.d || ""), h("div", { class: "games" }, GAMES.filter(g => g.cat === homeFilter).map(g => gameCard(g, data))));
+      body.append(h("div", { class: "lb-group" }, h("div", { class: "lb-ghead" }, h("h3", {}, homeFilter), h("p", {}, CAT_INFO[homeFilter]?.d || "")),
+        h("div", { class: "lb-grid" }, GAMES.filter(g => g.cat === homeFilter).map(g => gameCard(g, data)))));
     }
-    if (anim) $$(".gcard", body).forEach((c, k) => c.animate?.([{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay: Math.min(k, 12) * 22, easing: "ease-out", fill: "backwards" }));
+    if (anim && !matchMedia("(prefers-reduced-motion: reduce)").matches) $$(".gk", body).forEach((c, k) => c.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 220, delay: Math.min(k, 12) * 18, easing: "ease-out", fill: "backwards" }));
   }
   let spinning = false;
   function roulette() {
-    if (spinning) return; const cards = $$(".gcard:not([disabled])", body); if (!cards.length) return;
+    if (spinning) return; const cards = $$(".gk:not([disabled])", body); if (!cards.length) return;
     spinning = true; dice.disabled = true; root.scrollIntoView({ behavior: "smooth", block: "start" });
     const target = cards[Math.random() * cards.length | 0], steps = 16; let k = 0, cur = null;
     const tick = () => {
@@ -3737,30 +3719,12 @@ function Lobby(data, set) {
 }
 
 /* ---------------- SẢNH TRÒ CHƠI ---------------- */
+let homePickOpen = false;
 function Home() {
   navPage = "home";
   setScreen("home", st => {
     const set = curSet(), data = parseSet(set);
-    setTitle("Sảnh trò chơi", `${GAMES.length} trò chơi · bộ đề: ${set.name}`);
-    const camMain = on(h("button", { class: "btn primary lg", "data-hit": true, "data-cam-toggle": true }, "Bật camera"), toggleCam);
-    const calib = on(h("button", { class: "btn lg", "data-hit": true }, "Hiệu chỉnh tay"), () => go("practice"));
-    const step = (n, t, sub, done, fn) => on(h("button", { class: "qstep" + (done ? " done" : ""), "data-hit": true }, h("i", {}, done ? "✓" : n), h("span", {}, h("b", {}, t), h("small", {}, sub))), fn);
-    const quick = h("div", { class: "qsteps" },
-      step(1, "Bật camera", Cam.running ? `Đang bật · ${DET.fps || "…"} hình/giây` : "Cho phép trình duyệt dùng webcam", Cam.running, toggleCam),
-      step(2, "Hiệu chỉnh tay", S.calibrated ? "Đã hiệu chỉnh trên máy này" : "3 bước, khoảng 1 phút", S.calibrated, () => go("practice")),
-      step(3, "Chọn trò chơi", `${GAMES.filter(gm => gm.ok(data)).length} trò dùng được với bộ đề này`, false, () => { const el = $("#lobby"); el?.scrollIntoView({ behavior: "smooth", block: "start" }); }));
-    const welcome = h("section", { class: "panel welcome" }, h("div", { class: "wl-top" },
-      h("div", {},
-        h("p", { class: "eyebrow" }, "Không chạm, không chuột"),
-        h("h2", {}, "Giơ tay lên, ", h("em", {}, "cả lớp cùng chơi")),
-        h("p", { class: "lead" }, "Webcam nhận ra bàn tay học sinh: chạm đầu ngón trỏ vào nút như chạm màn hình cảm ứng giữa không trung, chụm hai ngón hoặc nắm tay để cầm và kéo thẻ."),
-        h("div", { class: "row" }, camMain, calib),
-        h("p", { class: "cam-msg", "data-cam-msg": true }, camNote())),
-      h("div", { class: "stage-pv" }, h("video", { class: "pv", muted: true, playsinline: true }),
-        h("div", { class: "pv-empty", "data-pv-empty": true, html: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M16 10l5-3v10l-5-3"/></svg><span>Khung hình camera sẽ hiện ở đây</span>' }),
-        h("span", { class: "pv-badge", "data-cam-badge": true, hidden: true }, h("i"), "Trực tiếp"))), quick);
-    const cnt = (n, l) => h("div", { class: "cnt" }, h("b", {}, n), h("small", {}, l));
-    const top = Object.entries(CLS.scores).sort((a, b) => b[1].score - a[1].score).slice(0, 3);
+    setTitle("Sảnh trò chơi", `Bộ đề: ${set.name}`);
     /* bộ đề đang dùng + chọn nhanh ngay tại sảnh (lọc: gần đây / yêu thích / theo môn) */
     const live = SETS.filter(s => !s.archived);
     const subjects = [...new Set(live.map(s => s.subject).filter(Boolean))].sort((x, y) => live.filter(s => s.subject === y).length - live.filter(s => s.subject === x).length).slice(0, 4);
@@ -3782,39 +3746,58 @@ function Home() {
         const on_ = s.id === currentId;
         const b = h("button", { class: "sp-row" + (on_ ? " active" : ""), "data-hit": true, role: "radio", "aria-checked": on_ ? "true" : "false" },
           h("span", { class: "sp-dot" }), h("span", { class: "sp-txt" }, h("b", {}, (s.fav ? "★ " : "") + s.name),
-            h("small", {}, [setMeta(s), s.date ? fmtDate(s.date) : "", setTotal(s) + " mục"].filter(Boolean).join(" · "))));
+            h("small", {}, [setMeta(s), s.date ? fmtDate(s.date) : "", setTotal(s) + " mục"].filter(Boolean).join(", "))));
         on(b, () => {
           if (s.id === currentId) return;
-          currentId = s.id; s.lastUsed = Date.now(); saveSets(); Sfx.right(); Home(); toast(`Đang dùng bộ đề: ${s.name}`, 2200);
-          requestAnimationFrame(() => $$(".gcard").forEach((c, k) => c.animate?.([{ opacity: .35, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 320, delay: k * 25, easing: "ease-out", fill: "backwards" })));
+          currentId = s.id; s.lastUsed = Date.now(); saveSets(); Sfx.right(); homePickOpen = false; Home(); toast(`Đang dùng bộ đề: ${s.name}`, 2200);
         });
         pickList.append(b);
       });
-      if (!shown.length) pickList.append(h("p", { class: "muted", style: "margin:6px 2px;font-size:13.5px" }, nq ? "Không có bộ đề nào khớp." : homePick === "fav" ? "Chưa có bộ đề yêu thích. Đánh dấu ★ trong mục Bộ đề." : "Chưa có bộ đề."));
-      if (more > 0) pickList.append(on(h("button", { class: "sp-more", "data-hit": true }, `Xem thêm ${more} bộ đề trong thư viện →`), () => { if (homePick && !["recent", "fav"].includes(homePick)) { LIB.subject = homePick; LIB.view = "all"; } else if (homePick === "fav") LIB.view = "fav"; saveLib(); go("sets"); }));
-      requestAnimationFrame(() => { const act = pickList.querySelector(".sp-row.active"); if (act && act.offsetTop + act.offsetHeight > pickList.clientHeight) pickList.scrollTop = act.offsetTop - 2; });
+      if (!shown.length) pickList.append(h("p", { class: "muted", style: "margin:6px 2px;font-size:14px" }, nq ? "Không có bộ đề nào khớp với từ đã gõ." : homePick === "fav" ? "Chưa có bộ đề yêu thích. Đánh dấu ★ trong mục Bộ đề." : "Chưa có bộ đề nào."));
+      if (more > 0) pickList.append(on(h("button", { class: "sp-more", "data-hit": true }, `Xem thêm ${more} bộ đề trong thư viện`), () => { if (homePick && !["recent", "fav"].includes(homePick)) { LIB.subject = homePick; LIB.view = "all"; } else if (homePick === "fav") LIB.view = "fav"; saveLib(); go("sets"); }));
     };
     const paintTabs = () => {
       tabs.innerHTML = "";
       [["recent", "Gần đây"], ["fav", "★ Yêu thích"], ...subjects.map(s => [s, s])].forEach(([v, l]) =>
         tabs.append(on(h("button", { class: "fchip sm" + (homePick === v ? " active" : ""), "data-hit": true }, l), () => { homePick = v; if (search) search.value = ""; paintTabs(); paintPick(); })));
     };
-    const search = live.length > 5 ? h("input", { type: "search", id: "set-search", placeholder: "Tìm bộ đề theo tên, môn, chủ đề…", class: "sp-search" }) : null;
+    const search = live.length > 5 ? h("input", { type: "search", id: "set-search", placeholder: "Tìm bộ đề theo tên, môn, chủ đề…", class: "sp-search", "aria-label": "Tìm bộ đề" }) : null;
     search?.addEventListener("input", () => paintPick(search.value));
     paintTabs(); paintPick();
-    const setcard = h("section", { class: "panel setcard" },
-      h("div", {}, h("p", { class: "eyebrow" }, "Bộ đề đang dùng"), h("h3", {}, set.name), h("p", { class: "muted", style: "margin:4px 0 0" }, [setMeta(set), set.date ? "Ngày dạy " + fmtDate(set.date) : ""].filter(Boolean).join(" · "))),
-      h("div", { class: "counts" }, cnt(data.quiz.length, "trắc nghiệm"), cnt(data.tf.length, "đúng / sai"), cnt(data.match.length, "cặp ghép"), cnt(data.sort.length, "nhóm"), cnt(data.order.length, "dãy thứ tự"), cnt(data.words.length, "từ khóa")),
-      h("div", { class: "stack", style: "gap:8px" },
-        h("div", { class: "sp-head" }, h("b", {}, "Đổi bộ đề"), h("small", { class: "muted" }, `${live.length} bộ đề`)),
-        search, tabs, pickList),
-      h("div", { class: "row" }, on(h("button", { class: "btn sm", "data-hit": true }, "Mở thư viện bộ đề"), () => go("sets")), on(h("button", { class: "btn sm", "data-hit": true }, "Bảng điểm lớp"), () => go("class"))),
-      top.length ? h("div", { class: "muted", style: "font-size:13.5px" }, "Dẫn đầu buổi học: " + top.map(([n, r]) => `${n} (${vi(r.score)})`).join(" · ")) : null);
-    st.append(h("div", { class: "wrap" }, h("div", { class: "dash" }, welcome, setcard), Lobby(data, set)));
+    const parts = [[data.quiz.length, "câu trắc nghiệm"], [data.tf.length, "câu đúng/sai"], [data.match.length, "cặp ghép"], [data.sort.length, "nhóm phân loại"], [data.order.length, "dãy thứ tự"], [data.words.length, "từ khóa"]].filter(([n]) => n);
+    const picker = h("div", { class: "desk-picker", id: "deskPicker", hidden: !homePickOpen },
+      h("div", { class: "dp-top" }, search, tabs), pickList);
+    const pickBtn = on(h("button", { class: "btn" + (homePickOpen ? " on" : ""), "data-hit": true, "aria-expanded": homePickOpen ? "true" : "false", "aria-controls": "deskPicker" },
+      h("span", { class: "ico", html: '<svg viewBox="0 0 24 24"><path d="M4 7h13M4 12h9M4 17h6M17 11l3 3-3 3"/></svg>' }), homePickOpen ? "Đóng danh sách" : "Đổi bộ đề"), () => {
+      homePickOpen = !homePickOpen; picker.hidden = !homePickOpen; pickBtn.classList.toggle("on", homePickOpen); pickBtn.setAttribute("aria-expanded", homePickOpen);
+      pickBtn.lastChild.textContent = homePickOpen ? "Đóng danh sách" : "Đổi bộ đề"; if (homePickOpen) (search || pickList.querySelector(".sp-row"))?.focus();
+    });
+    const top = Object.entries(CLS.scores).sort((a, b) => b[1].score - a[1].score).filter(([, r]) => r.score > 0).slice(0, 3);
+    /* các bước bật tay: tích như ô kiểm trong vở */
+    const step = (t, sub, done, fn) => on(h("button", { class: "dk-step" + (done ? " done" : ""), "data-hit": true }, h("i", { "aria-hidden": "true", html: done ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : "" }), h("span", {}, h("b", {}, t), h("small", {}, sub))), fn);
+    const desk = h("section", { class: "desk" },
+      h("div", { class: "desk-set" },
+        h("div", { class: "desk-name" }, h("small", {}, "Bộ đề đang dùng"), h("h2", {}, set.name),
+          h("p", {}, [setMeta(set), set.date ? "ngày dạy " + fmtDate(set.date) : ""].filter(Boolean).join(", ") + (parts.length ? ". Có " + parts.map(([n, l]) => `${n} ${l}`).join(", ") + "." : ". Bộ đề chưa có câu hỏi nào."))),
+        h("div", { class: "desk-act" }, pickBtn, on(h("button", { class: "btn ghost", "data-hit": true }, "Sửa bộ đề"), () => go("sets")))),
+      picker,
+      h("div", { class: "desk-cam" },
+        h("p", { class: "dk-lead" }, h("b", {}, "Chơi bằng tay qua webcam. "), "Học sinh đưa đầu ngón trỏ vào nút như chạm màn hình cảm ứng giữa không trung."),
+        h("div", { class: "dk-steps" },
+          step("Bật camera", Cam.running ? `Đang bật, ${DET.fps || "…"} hình/giây` : "Cho phép trình duyệt dùng webcam", Cam.running, toggleCam),
+          step("Hiệu chỉnh tay", S.calibrated ? "Đã hiệu chỉnh trên máy này" : "3 bước, khoảng 1 phút", S.calibrated, () => go("practice"))),
+        h("p", { class: "cam-msg", "data-cam-msg": true }, camNote())),
+      top.length ? h("p", { class: "desk-top" }, "Dẫn đầu buổi học: " + top.map(([n, r]) => `${n} ${vi(r.score)} điểm`).join(", ")) : null);
+    st.append(h("div", { class: "wrap home2" }, desk, Lobby(data, set)));
   });
 }
 
 /* ---------------- GIỚI THIỆU + CHỌN NGƯỜI CHƠI ---------------- */
+const HOW_IC = {
+  tap: '<svg viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11M12 10V9a1.5 1.5 0 0 1 3 0v2M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-4.8-2.4L4 15.7a1.5 1.5 0 0 1 2.3-1.9L9 16V11"/></svg>',
+  pick: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.8 2.8L16.5 9.5"/></svg>',
+  drag: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="10" height="10" rx="2.5"/><path d="M13 13l7 7M20 14.5V20h-5.5"/></svg>'
+};
 function Intro(g) {
   setScreen("intro", st => {
     setTitle(g.name, curSet().name); hud(null);
@@ -3824,18 +3807,19 @@ function Intro(g) {
     let players = null;
     if (!team) {
       if (!CLS.roster.includes(Play.player)) Play.player = null;
-      players = h("div", { class: "players" });
-      const paint = () => $$(".pchip", players).forEach(c => c.classList.toggle("active", c._n === (Play.player || "")));
-      const add = (label, n) => { const c = on(h("button", { class: "pchip", "data-hit": true }, label), () => { Play.player = n || null; paint(); }); c._n = n || ""; players.append(c); };
+      players = h("div", { class: "players", role: "radiogroup", "aria-label": "Người chơi" });
+      const paint = () => $$(".pchip", players).forEach(c => { const a = c._n === (Play.player || ""); c.classList.toggle("active", a); c.setAttribute("aria-checked", a ? "true" : "false"); });
+      const add = (label, n, cls = "") => { const c = on(h("button", { class: "pchip " + cls, "data-hit": true, role: "radio" }, label), () => { Play.player = n || null; paint(); }); c._n = n || ""; players.append(c); };
       if (CLS.roster.length) {
         presentList().forEach(n => add(n, n));
-        const rnd = on(h("button", { class: "pchip", "data-hit": true }, "Gọi ngẫu nhiên"), () => {
+        add("Không ghi tên", "", "plain");
+        const rnd = on(h("button", { class: "pchip rnd", "data-hit": true }, clIcon("dice"), "Gọi ngẫu nhiên"), () => {
           const chips = $$(".pchip", players).filter(c => c._n); let k = 0, steps = 16 + (Math.random() * chips.length | 0);
           const tick = () => { chips.forEach(c => c.classList.remove("flash")); const c = chips[k % chips.length]; c.classList.add("flash"); Sfx.tick();
             if (++k < steps) ts.push(setTimeout(tick, 40 + k * k * .9)); else { c.classList.remove("flash"); Play.player = c._n; paint(); Sfx.right(); FX.burstEl(c, 20); } };
           tick();
         });
-        players.append(rnd); add("Không ghi tên", ""); paint();
+        players.prepend(rnd); paint();
       }
     }
     /* thiết lập riêng của trò: tóm tắt + mở rộng để chỉnh */
@@ -3851,22 +3835,25 @@ function Intro(g) {
       if (optOpen) optBox.append(gameOptsPanel(g, idata, () => { const keep = optOpen; paintOpt(); optOpen = keep; }));
     };
     paintOpt();
-    st.append(h("div", { class: "center" }, h("div", { class: "card intro", style: `--c:${g.color}` }, gameCover(g, true),
-      h("div", { class: "card-body intro-body" }, h("div", { class: "intro-l" },
-        h("div", {}, h("p", { class: "eyebrow" }, `${g.cat} · ${g.who}`), h("h2", {}, g.name)),
-        h("p", {}, g.how),
-        h("div", { class: "howto" },
-          h("div", {}, h("b", {}, "Chạm"), h("small", {}, "Đưa đầu ngón trỏ vào nút, nút sáng lên và lún dần xuống.")),
-          h("div", {}, h("b", {}, "Chọn"), h("small", {}, pick + ".")),
-          h("div", {}, h("b", {}, "Cầm & kéo"), h("small", {}, S.grab ? "Chụm hai ngón hoặc nắm cả bàn tay, di chuyển rồi mở tay để thả." : "Chụm hai ngón, di chuyển rồi mở tay để thả.")))),
-        h("div", { class: "intro-r" },
-        optBox,
-        team ? h("p", { class: "muted", style: "font-size:14.5px" }, "Hai học sinh đứng hai bên, mỗi em dùng một tay. Bật chế độ nhận 2 tay trong Cài đặt.")
-          : h("div", { class: "stack", style: "gap:8px" }, h("b", {}, "Người chơi"),
-            CLS.roster.length ? players : h("p", { class: "muted", style: "margin:0;font-size:14.5px" }, "Thêm danh sách học sinh ở mục “Học sinh & điểm” để ghi điểm cho từng em.")),
-        h("div", { class: "row intro-actions" }, on(h("button", { class: "btn primary lg", "data-hit": true }, "Bắt đầu chơi"), () => Countdown(g)),
-          on(h("button", { class: "btn lg", "data-hit": true }, "Chọn trò khác"), () => go("home")),
-          Cam.running ? null : on(h("button", { class: "btn lg", "data-hit": true, "data-cam-toggle": true }, "Bật camera"), toggleCam)))))));
+    const howRow = (ic, t, s) => h("li", {}, h("span", { class: "gs-hic", html: HOW_IC[ic] }), h("span", {}, h("b", {}, t), h("small", {}, s)));
+    st.append(h("div", { class: "wrap" }, h("article", { class: "gsheet", style: `--c:${g.color}` },
+      h("header", { class: "gs-head" }, gameArt(g, true),
+        h("div", {}, h("h2", {}, g.name), h("p", { class: "gs-sub" }, gestTag(g), whoTag(g), h("span", { class: "gmeta plain" }, g.count(idata))))),
+      h("div", { class: "gs-body" },
+        h("section", { class: "gs-how" },
+          h("h3", {}, "Cách chơi"), h("p", {}, g.how),
+          h("ul", { class: "gs-gest" },
+            howRow("tap", "Chạm", "Đưa đầu ngón trỏ vào nút, nút sáng lên và lún dần xuống."),
+            howRow("pick", "Chọn", pick + "."),
+            howRow("drag", "Cầm và kéo", S.grab ? "Chụm hai ngón hoặc nắm cả bàn tay, di chuyển rồi mở tay để thả." : "Chụm hai ngón, di chuyển rồi mở tay để thả."))),
+        h("section", { class: "gs-side" },
+          team ? h("div", { class: "gs-who" }, h("h3", {}, "Ai chơi?"), h("p", {}, g.who === "Cả lớp" ? "Cả lớp cùng chơi, không cần chọn tên." : "Học sinh chia đội đứng hai bên màn hình. Bật nhận 2 tay trong Cài đặt để hai em chơi cùng lúc."))
+            : h("div", { class: "gs-who" }, h("h3", {}, "Ai chơi?"),
+              CLS.roster.length ? players : h("p", {}, "Thêm danh sách lớp ở mục Học sinh và điểm để ghi điểm cho từng em.")),
+          optBox,
+          h("div", { class: "gs-act" }, on(h("button", { class: "btn primary xl", "data-hit": true }, h("span", { class: "ico", html: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg>' }), "Bắt đầu chơi"), () => Countdown(g)),
+            h("div", { class: "row" }, on(h("button", { class: "btn", "data-hit": true }, "Chọn trò khác"), () => go("home")),
+              Cam.running ? null : on(h("button", { class: "btn", "data-hit": true, "data-cam-toggle": true }, "Bật camera"), toggleCam))))))));
     return () => ts.forEach(clearTimeout);
   }, { game: true });
 }
@@ -3874,7 +3861,7 @@ function Countdown(g) {
   setScreen("count", st => {
     setTitle(g.name, curSet().name);
     const box = h("div", { class: "center" }); st.append(box); let n = 3; const ts = [];
-    const show = () => { box.innerHTML = ""; box.append(h("div", { class: "countdown" }, n > 0 ? n : "Bắt đầu!")); Sfx.tone(n > 0 ? 600 : 900, .15, "triangle", .1); };
+    const show = () => { box.innerHTML = ""; box.append(h("div", { class: "countdown" + (n > 0 ? "" : " go"), role: "status" }, n > 0 ? n : "Bắt đầu!")); Sfx.tone(n > 0 ? 600 : 900, .15, "triangle", .1); };
     show();
     const step = () => { n--; if (n < 0) { Play(g); return; } show(); ts.push(setTimeout(step, n === 0 ? 600 : 800)); };
     ts.push(setTimeout(step, 800));
@@ -3890,6 +3877,8 @@ function Play(g) {
   setScreen("game", st => { setTitle(g.name, curSet().name); return g.run(st, data, g); }, { game: true });
 }
 Play.player = null;
+/* vòng khoanh bút đỏ quanh điểm: nét tay hơi lệch, chồng đầu cuối như thầy cô khoanh */
+const PEN_RING = '<svg class="rp-ring" viewBox="0 0 200 140" aria-hidden="true"><path pathLength="1" d="M112 14C66 8 18 30 14 70c-4 40 42 60 92 58 52-2 84-26 82-60-2-36-44-58-96-54-20 2-34 8-42 14"/></svg>';
 function Result(g, r) {
   setScreen("result", st => {
     setTitle(g.name, "Kết quả"); hud(null);
@@ -3898,15 +3887,24 @@ function Result(g, r) {
     if (record) { bests[key] = { score: r.score, at: Date.now(), by: Play.player || "" }; store.set("lhvt2.best", bests); }
     if (Play.player && !r.noRecord) creditPlayer(Play.player, r.score, g.id);
     const title = r.title || (stars === 3 ? "Xuất sắc!" : stars === 2 ? "Làm tốt lắm!" : stars === 1 ? "Cố gắng thêm nhé!" : "Thử lại nào!");
-    const stats = r.stats || [["Điểm", vi(r.score)], [r.label || "Đúng", `${r.correct}/${r.total}`], [record ? "Kỷ lục mới" : "Kỷ lục", vi(Math.max(prev, r.score))]];
-    st.append(h("div", { class: "center" }, h("div", { class: "card", style: `--c:${g.color}` }, h("div", { class: "card-body" },
-      h("div", { class: "stars", html: [0, 1, 2].map(i => STAR.replace("<svg", `<svg class="${i < stars ? "on" : ""}"`)).join("") }),
-      h("h2", {}, (Play.player && !r.title ? Play.player + ": " : "") + title), h("p", {}, r.note || `${g.name} · ${curSet().name}`),
-      h("div", { class: "stats" }, stats.map(([l, v]) => h("div", { class: "stat" }, h("small", {}, l), h("b", {}, v)))),
-      Play.player && !r.noRecord ? h("p", { style: "font-size:14.5px" }, `Đã cộng ${vi(r.score)} điểm cho ${Play.player}. Tổng buổi học: ${vi(CLS.scores[Play.player]?.score || 0)} điểm.`) : null,
-      h("div", { class: "row" }, on(h("button", { class: "btn primary lg", "data-hit": true }, "Chơi lại"), () => Countdown(g)),
+    /* điểm theo thang 10 như bài kiểm tra (làm tròn 0,5); trò không đếm câu đúng thì ghi điểm trò chơi */
+    const grade = r.total ? Math.round(acc * 20) / 2 : null;
+    const gradeTxt = grade != null ? grade.toLocaleString("vi-VN") : vi(r.score);
+    const stats = r.stats || [[r.label || "Số câu đúng", `${r.correct}/${r.total}`], ["Điểm trò chơi", vi(r.score)], [record ? "Kỷ lục mới" : "Kỷ lục", vi(Math.max(prev, r.score))]];
+    st.append(h("div", { class: "wrap" }, h("article", { class: "rpaper" + (grade == null ? " pts" : ""), style: `--c:${g.color}` },
+      h("header", { class: "rp-head" },
+        h("div", {}, h("small", {}, "Bài"), h("b", {}, g.name), h("span", {}, curSet().name)),
+        h("div", {}, h("small", {}, "Họ và tên"), h("b", { class: Play.player ? "" : "muted" }, Play.player || (g.team ? "Cả lớp" : "Chưa ghi tên")))),
+      h("div", { class: "rp-grade" },
+        h("div", { class: "rp-score" }, h("span", { class: "rp-lbl" }, grade != null ? "Điểm" : "Điểm trò chơi"),
+          h("span", { class: "rp-mark" }, h("b", { class: "rp-num" + (gradeTxt.length > 3 ? " long" : "") }, gradeTxt), h("span", { html: PEN_RING }))),
+        h("div", { class: "rp-cmt" }, h("span", { class: "rp-lbl" }, "Lời phê của thầy cô"),
+          h("p", { class: "rp-hand" }, title), h("p", { class: "rp-note" }, r.note || `${g.name}, bộ đề ${curSet().name}`))),
+      h("dl", { class: "rp-stats" }, stats.map(([l, v]) => h("div", {}, h("dt", {}, l), h("dd", {}, v)))),
+      Play.player && !r.noRecord ? h("p", { class: "rp-credit" }, `Đã cộng ${vi(r.score)} điểm cho ${Play.player}. Tổng buổi học: ${vi(CLS.scores[Play.player]?.score || 0)} điểm.`) : null,
+      h("div", { class: "row rp-act" }, on(h("button", { class: "btn primary lg", "data-hit": true }, "Chơi lại"), () => Countdown(g)),
         CLS.roster.length && !g.team ? on(h("button", { class: "btn lg", "data-hit": true }, "Người chơi tiếp theo"), () => Intro(g)) : null,
-        on(h("button", { class: "btn lg", "data-hit": true }, "Chọn trò khác"), () => go("home")))))));
+        on(h("button", { class: "btn lg", "data-hit": true }, "Chọn trò khác"), () => go("home"))))));
     if (stars >= 2) { FX.rain(); Sfx.win(); } else Sfx.tone(440, .3, "triangle", .1);
   }, { game: true });
 }
@@ -5049,16 +5047,16 @@ function remoteStop() {
 /* ảnh chụp những gì đang có trên màn hình: tiêu đề, câu hỏi, các nút bấm được */
 function remoteSnapshot() {
   const vis = el => { if (el.closest("[hidden]")) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
-  const label = el => (el.querySelector(".gname, .srow-t b")?.textContent || el.getAttribute("aria-label") || el.innerText || el.title || "").replace(/\s+/g, " ").trim().slice(0, 70);
+  const label = el => (el.querySelector(".gname")?.textContent || el.getAttribute("aria-label") || el.innerText || el.title || "").replace(/\s+/g, " ").trim().slice(0, 70);
   const btns = [], seenGame = new Set();
   for (const el of document.querySelectorAll("#stage [data-hit]")) {
     if (btns.length >= 80) break;
     if (!vis(el) || el.closest(".hist") || el.matches(".tts-btn")) continue;
     const l = label(el); if (!l) continue;
-    if (el.matches(".gcard,.srow")) { if (seenGame.has(l)) continue; seenGame.add(l); }
+    if (el.matches(".gk,.lb-rc")) { if (seenGame.has(l)) continue; seenGame.add(l); }
     if (!el.dataset.rid) el.dataset.rid = String(++RM.rid);
     const ans = el.matches(".ans,.tfz,.gate,.hoop,.bopt,.bcell,.tile,.ws-cell,.mitem,.mcard,.tok,.key,.chip,.mole,.bubble,.fruit,.fish");
-    const kind = ans ? "ans" : el.matches(".btn.primary,.pick-go") ? "pri" : el.matches(".gcard,.srow,.feat .btn") ? "game" : "btn";
+    const kind = ans ? "ans" : el.matches(".btn.primary,.pick-go") ? "pri" : el.matches(".gk,.lb-rc") ? "game" : "btn";
     let color = ""; if (ans) { try { color = getComputedStyle(el).getPropertyValue("--c").trim(); } catch (e) {} }
     btns.push({ r: el.dataset.rid, l, k: kind, d: el.disabled || el.classList.contains("is-locked") || el.classList.contains("is-gone") ? 1 : 0, c: color });
   }
@@ -5216,7 +5214,7 @@ function SettingsPage() {
         h("div", { class: "field" }, h("span", {}, "Số bàn tay nhận diện"), seg("hands", [[1, "1 tay"], [2, "2 tay (cần cho Kéo co)"]], S.hands, v => { S.hands = +v; try { Cam.lm?.setOptions({ numHands: S.hands }); } catch (e) {} })),
         on(h("button", { class: "btn sm", "data-hit": true }, "Chạy lại hiệu chỉnh tay"), () => { S.calibrated = false; saveS(); go("practice"); })),
       h("section", { class: "panel stack" }, h("h3", {}, "Hiển thị"),
-        h("div", { class: "field" }, h("span", {}, "Giao diện"), seg("theme", [["dark", "Tối (màn hình laptop)"], ["light", "Sáng (máy chiếu)"]], S.theme, v => { S.theme = v; applyTheme(); })),
+        h("div", { class: "field" }, h("span", {}, "Giao diện"), seg("theme", [["light", "Giấy (phòng sáng, máy chiếu)"], ["dark", "Bảng đen (phòng tối)"]], S.theme, v => { S.theme = v; applyTheme(); })),
         h("div", { class: "field" }, h("span", {}, "Chế độ hiển thị"), seg("view", [["ar", "Thấy chính mình trên màn hình"], ["virtual", "Màn hình thường"]], S.view, v => S.view = v),
           h("small", {}, "Thấy chính mình: hình camera hiện phía sau các nút dạng kính mờ, học sinh nhìn tay thật của mình để chạm. Màn hình thường: không hiện hình camera, bàn tay được vẽ lại và không cần với tới đúng vị trí nút.")),
         range("bgdim", "Độ tối của hình camera phía sau", 0, .6, .01, S.bgDim, v => v < .08 ? "Rất sáng" : v < .25 ? "Vừa, dễ đọc chữ" : "Tối, nổi bật nút", v => S.bgDim = v),
